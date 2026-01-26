@@ -53,11 +53,12 @@ DOCKER_ARGS=(
     --rm
     -it
     -v "${PROJECT_ROOT}:/workspace"
+    -w /workspace
     -p 8888:8888
     -p 5555:5555
     -p 5556:5556
     -e "DISPLAY=${DISPLAY:-:0}"
-    -e "PYTHONPATH=/workspace/lerobot_alohamini"
+    -e "PYTHONPATH=/workspace/src"
 )
 
 # Add device passthrough if devices exist (for hardware deployment)
@@ -104,7 +105,7 @@ else
     echo "  - View documentation: cat docs/ALOHAMINI_ARCHITECTURE.md"
     echo "  - Run notebook: jupyter notebook docs/AlohaMini_Walkthrough.ipynb"
     echo "  - Read capabilities: cat docs/ALOHAMINI_CAPABILITIES_REPORT.md"
-    echo "  - View examples: ls lerobot_alohamini/examples/alohamini/"
+    echo "  - View examples: ls workspace/examples/"
     echo "  - Find cameras: python -m lerobot.scripts.lerobot_find_cameras"
     echo "  - Exit container: exit"
     echo ""
