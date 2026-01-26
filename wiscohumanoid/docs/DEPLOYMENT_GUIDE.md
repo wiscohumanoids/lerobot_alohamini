@@ -337,7 +337,7 @@ cd ~/lerobot_alohamini
 docker/run.sh
 
 # Inside container, start host server
-python lerobot_alohamini/examples/alohamini/lekiwi_host.py
+python examples/alohamini/lekiwi_host.py
 ```
 
 **Using Native Installation**:
@@ -349,7 +349,7 @@ ssh ubuntu@192.168.1.100
 cd ~/lerobot_alohamini
 
 # Start host server
-python lerobot_alohamini/examples/alohamini/lekiwi_host.py
+python examples/alohamini/lekiwi_host.py
 ```
 
 **Expected Output**:
@@ -379,17 +379,17 @@ cd /path/to/lerobot_alohamini
 source venv/bin/activate
 
 # Run client
-python lerobot_alohamini/examples/alohamini/lekiwi_client.py --remote-ip 192.168.1.100
+python examples/alohamini/lekiwi_client.py --remote-ip 192.168.1.100
 ```
 
 **Or use BiSO100 teleoperation**:
 ```bash
-python lerobot_alohamini/examples/alohamini/teleoperate_bi.py --remote-ip 192.168.1.100
+python examples/alohamini/teleoperate_bi.py --remote-ip 192.168.1.100
 ```
 
 **Or use voice control**:
 ```bash
-python lerobot_alohamini/examples/alohamini/teleoperate_bi_voice.py --remote-ip 192.168.1.100
+python examples/alohamini/teleoperate_bi_voice.py --remote-ip 192.168.1.100
 ```
 
 **Expected Output**:
@@ -416,7 +416,7 @@ Controls:
 
 ```bash
 # Example: Evaluate ACT policy
-python lerobot_alohamini/examples/alohamini/evaluate_bi.py \
+python examples/alohamini/evaluate_bi.py \
     --robot-path lekiwi \
     --policy-path path/to/trained_policy \
     --remote-ip 192.168.1.100
@@ -431,7 +431,7 @@ python lerobot_alohamini/examples/alohamini/evaluate_bi.py \
 
 ```bash
 # On laptop (connected to robot server)
-python lerobot_alohamini/examples/alohamini/record_bi.py \
+python examples/alohamini/record_bi.py \
     --robot-path lekiwi_client \
     --remote-ip 192.168.1.100 \
     --repo-id your-username/alohamini-dataset \
@@ -442,7 +442,7 @@ python lerobot_alohamini/examples/alohamini/record_bi.py \
 
 ```bash
 # On laptop or Jetson (requires GPU)
-python lerobot_alohamini/examples/training/train_policy.py \
+python examples/training/train_policy.py \
     --policy act \
     --dataset-repo-id your-username/alohamini-dataset \
     --output-dir outputs/act_policy \
@@ -453,7 +453,7 @@ python lerobot_alohamini/examples/training/train_policy.py \
 
 ```bash
 # Evaluate on hardware
-python lerobot_alohamini/examples/alohamini/evaluate_bi.py \
+python examples/alohamini/evaluate_bi.py \
     --robot-path lekiwi \
     --policy-path outputs/act_policy \
     --remote-ip 192.168.1.100
@@ -530,7 +530,7 @@ echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 sudo iw dev wlan0 set power_save off
 
 # Set process priority
-sudo nice -n -10 python lerobot_alohamini/examples/alohamini/lekiwi_host.py
+sudo nice -n -10 python examples/alohamini/lekiwi_host.py
 ```
 
 ---
@@ -595,7 +595,7 @@ python -m lerobot.scripts.lerobot_find_port
 
 **Enable cameras**:
 ```bash
-nano lerobot_alohamini/src/lerobot/robots/alohamini/config_lekiwi.py
+nano src/lerobot/robots/alohamini/config_lekiwi.py
 # Uncomment lines 23-40
 ```
 
@@ -655,7 +655,7 @@ self.overcurrent_threshold = 1500  # Increase from default (use with caution!)
 tmux new -s robot
 
 # Run host server
-python lerobot_alohamini/examples/alohamini/lekiwi_host.py
+python examples/alohamini/lekiwi_host.py
 
 # Detach: Ctrl+b, then d
 

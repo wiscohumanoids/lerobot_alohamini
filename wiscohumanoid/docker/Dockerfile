@@ -85,14 +85,17 @@ RUN pip install --no-cache-dir \
 WORKDIR /workspace/lerobot_alohamini
 
 # Copy repository contents
-COPY lerobot_alohamini/ /workspace/lerobot_alohamini/
-COPY wiscohumanoid/docker/requirements-ubuntu.txt /workspace/
+COPY src/ /workspace/lerobot_alohamini/src/
+COPY examples/ /workspace/lerobot_alohamini/examples/
+COPY pyproject.toml setup.py MANIFEST.in README.md /workspace/lerobot_alohamini/
+COPY requirements-ubuntu.txt /workspace/
 
 # Install Python dependencies
-# Note: This installs lerobot in editable mode with all optional dependencies
-RUN pip install --no-cache-dir -r /workspace/requirements-ubuntu.txt && \
-    pip install --no-deps \
-    git+https://github.com/huggingface/lerobot-libero.git@main
+# Install lerobot in editable mode and let pip resolve dependencies
+# This is simpler than using the frozen requirements.txt which has version conflicts
+RUN cd /workspace/lerobot_alohamini && \
+    pip install --no-cache-dir -e ".[aloha, pusht, xarm, dora, umi, reachy2, so100, umi, libero]" && \
+    pip install --no-deps git+https://github.com/huggingface/lerobot-libero.git@main
 
 # Install Jupyter for interactive notebooks
 RUN pip install --no-cache-dir \

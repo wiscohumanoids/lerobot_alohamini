@@ -41,13 +41,13 @@ AlohaMini is a **bimanual mobile manipulation robot** built on the LeRobot frame
 │                      LAPTOP (Client Side)                        │
 │                                                                   │
 │  ┌─────────────────────────────────────────────────────────────┐│
-│  │ lerobot_alohamini/examples/alohamini/teleoperate_bi_voice.py                   ││
+│  │ examples/alohamini/teleoperate_bi_voice.py                   ││
 │  │   - Main control loop (30 Hz)                                ││
 │  │   - Action merging from multiple sources                     ││
 │  └─────────────────────────────────────────────────────────────┘│
 │                                                                   │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────┐ │
-│  │ BiSO100Leader    │  │ KeyboardTeleop   │  │ Voice System   │ │
+│  │ BiSOLeader    │  │ KeyboardTeleop   │  │ Voice System   │ │
 │  │ (USB Serial)     │  │ (stdin)          │  │ (Microphone)   │ │
 │  │                  │  │                  │  │                │ │
 │  │ /dev/am_arm_     │  │ w/s/a/d/z/x     │  │ Gummy ASR →    │ │
@@ -114,7 +114,7 @@ AlohaMini is a **bimanual mobile manipulation robot** built on the LeRobot frame
 ```
 lerobot_alohamini/
 │
-├── lerobot_alohamini/examples/alohamini/           # AlohaMini-specific examples
+├── examples/alohamini/           # AlohaMini-specific examples
 │   ├── teleoperate_bi.py         # Basic bimanual teleoperation
 │   ├── teleoperate_bi_voice.py   # Teleoperation + voice control
 │   ├── record_bi.py              # Record teleoperation episodes → dataset
@@ -123,7 +123,7 @@ lerobot_alohamini/
 │   ├── voice_engine_gummy.py     # Speech recognition engine (ASR)
 │   └── voice_exec.py             # Voice command parsing + execution
 │
-├── lerobot_alohamini/src/lerobot/
+├── src/lerobot/
 │   ├── robots/
 │   │   ├── alohamini/
 │   │   │   ├── lekiwi.py                # LeKiwi robot controller (server)
@@ -132,16 +132,16 @@ lerobot_alohamini/
 │   │   │   ├── config_lekiwi.py         # Configurations
 │   │   │   └── lift_axis.py             # Z-axis lift controller
 │   │   │
-│   │   ├── bi_so100_follower/           # Bimanual follower (SO100 arms)
-│   │   │   ├── bi_so100_follower.py
-│   │   │   └── config_bi_so100_follower.py
+│   │   ├── bi_so_follower/           # Bimanual follower (SO100 arms)
+│   │   │   ├── bi_so_follower.py
+│   │   │   └── config_bi_so_follower.py
 │   │   │
 │   │   └── robot.py                     # Base Robot class
 │   │
 │   ├── teleoperators/
-│   │   ├── bi_so100_leader/             # Bimanual leader arms
-│   │   │   ├── bi_so100_leader.py
-│   │   │   └── config_bi_so100_leader.py
+│   │   ├── bi_so_leader/             # Bimanual leader arms
+│   │   │   ├── bi_so_leader.py
+│   │   │   └── config_bi_so_leader.py
 │   │   │
 │   │   ├── keyboard/                    # Keyboard teleoperation
 │   │   │   └── teleop_keyboard.py
@@ -181,8 +181,8 @@ lerobot_alohamini/
 
 ```mermaid
 graph TB
-    A[lerobot_alohamini/examples/alohamini/teleoperate_bi_voice.py] --> B[LeKiwiClient]
-    A --> C[BiSO100Leader]
+    A[examples/alohamini/teleoperate_bi_voice.py] --> B[LeKiwiClient]
+    A --> C[BiSOLeader]
     A --> D[KeyboardTeleop]
     A --> E[SpeechEngineGummy]
     A --> F[VoiceExecutor]
@@ -281,7 +281,7 @@ Same structure as observation space (mirror control).
   - Payload: JSON with base64-encoded images
   - Example: `{"arm_left_shoulder_pan.pos": 45.0, "head_top": "base64...", ...}`
 
-**Watchdog**: If no command received for >1.5 seconds, robot stops base wheels ([lekiwi_host.py:91-96](lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi_host.py#L91-L96)).
+**Watchdog**: If no command received for >1.5 seconds, robot stops base wheels ([lekiwi_host.py:91-96](src/lerobot/robots/alohamini/lekiwi_host.py#L91-L96)).
 
 ---
 
@@ -321,7 +321,7 @@ ID   Motor Name                Type         Control Mode
 
 **Forward Kinematics** (wheel velocities → body velocities):
 
-[lekiwi.py:429-477](lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi.py#L429-L477)
+[lekiwi.py:429-477](src/lerobot/robots/alohamini/lekiwi.py#L429-L477)
 
 ```python
 def _wheel_raw_to_body(left_wheel, back_wheel, right_wheel):
@@ -344,7 +344,7 @@ def _wheel_raw_to_body(left_wheel, back_wheel, right_wheel):
 
 **Inverse Kinematics** (body velocities → wheel velocities):
 
-[lekiwi.py:364-427](lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi.py#L364-L427)
+[lekiwi.py:364-427](src/lerobot/robots/alohamini/lekiwi.py#L364-L427)
 
 ```python
 def _body_to_wheel_raw(x, y, theta):
@@ -382,7 +382,7 @@ def _body_to_wheel_raw(x, y, theta):
 - Motor: Feetech STS3215 (ID 11 on left bus)
 - Multi-turn tracking (handles >360° rotation)
 
-**Homing Procedure** ([lift_axis.py:105-146](lerobot_alohamini/src/lerobot/robots/alohamini/lift_axis.py#L105-L146)):
+**Homing Procedure** ([lift_axis.py:105-146](src/lerobot/robots/alohamini/lift_axis.py#L105-L146)):
 
 ```python
 def home():
@@ -411,7 +411,7 @@ def home():
     # Now get_height_mm() will return ~0
 ```
 
-**Multi-Turn Tracking** ([lift_axis.py:84-95](lerobot_alohamini/src/lerobot/robots/alohamini/lift_axis.py#L84-L95)):
+**Multi-Turn Tracking** ([lift_axis.py:84-95](src/lerobot/robots/alohamini/lift_axis.py#L84-L95)):
 
 ```python
 def _update_extended_ticks():
@@ -430,7 +430,7 @@ def _update_extended_ticks():
     last_tick = cur_tick
 ```
 
-**P-Controller** ([lift_axis.py:158-177](lerobot_alohamini/src/lerobot/robots/alohamini/lift_axis.py#L158-L177)):
+**P-Controller** ([lift_axis.py:158-177](src/lerobot/robots/alohamini/lift_axis.py#L158-L177)):
 
 ```python
 def update():
@@ -459,7 +459,7 @@ def update():
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ Main Loop (lerobot_alohamini/examples/alohamini/teleoperate_bi_voice.py:77-105)   │
+│ Main Loop (examples/alohamini/teleoperate_bi_voice.py:77-105)   │
 │                           30 Hz                                  │
 └─────────────────────────────────────────────────────────────────┘
         │
@@ -477,7 +477,7 @@ def update():
         │
         ├─► 3. Get leader arm actions
         │      arm_actions = leader.get_action()
-        │      ├─► BiSO100Leader.get_action()
+        │      ├─► BiSOLeader.get_action()
         │      │   ├─► left_arm.get_action()
         │      │   └─► right_arm.get_action()
         │      └─► Returns: {"left_shoulder_pan.pos": v, ...}
@@ -522,12 +522,12 @@ def update():
 
 ### Teleoperation Script Walkthrough
 
-[teleoperate_bi_voice.py:1-110](lerobot_alohamini/examples/alohamini/teleoperate_bi_voice.py#L1-L110)
+[teleoperate_bi_voice.py:1-110](examples/alohamini/teleoperate_bi_voice.py#L1-L110)
 
 ```python
 # Line 7-15: Import robot, teleoperators, voice modules
 from lerobot.robots.alohamini import LeKiwiClient, LeKiwiClientConfig
-from lerobot.teleoperators.bi_so100_leader import BiSO100Leader
+from lerobot.teleoperators.bi_so_leader import BiSOLeader
 from lerobot.teleoperators.keyboard.teleop_keyboard import KeyboardTeleop
 from voice_engine_gummy import SpeechEngineGummy
 from voice_exec import VoiceExecutor
@@ -535,7 +535,7 @@ from voice_exec import VoiceExecutor
 # Line 30-39: Create configs and instantiate devices
 robot_config = LeKiwiClientConfig(remote_ip="127.0.0.1", id="my_alohamini")
 robot = LeKiwiClient(robot_config)
-leader = BiSO100Leader(bi_cfg)
+leader = BiSOLeader(bi_cfg)
 keyboard = KeyboardTeleop(KeyboardTeleopConfig())
 
 # Line 42-58: Setup speech engine with hotwords
@@ -591,7 +591,7 @@ while True:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ Main Loop (lerobot_alohamini/examples/alohamini/evaluate_bi.py:74-88)             │
+│ Main Loop (examples/alohamini/evaluate_bi.py:74-88)             │
 │                           30 Hz                                  │
 └─────────────────────────────────────────────────────────────────┘
         │
@@ -683,7 +683,7 @@ Policy output batch
 
 ### Robot Server Loop (LeKiwiHost)
 
-[lekiwi_host.py:51-136](lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi_host.py#L51-L136)
+[lekiwi_host.py:51-136](src/lerobot/robots/alohamini/lekiwi_host.py#L51-L136)
 
 ```python
 # Line 52-63: Initialize robot and ZMQ server
@@ -733,7 +733,7 @@ while duration < 6000:  # Run for ~1.7 hours
 
 ### Robot Action Execution (LeKiwi.send_action)
 
-[lekiwi.py:530-595](lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi.py#L530-L595)
+[lekiwi.py:530-595](src/lerobot/robots/alohamini/lekiwi.py#L530-L595)
 
 ```python
 def send_action(action: dict) -> dict:
@@ -774,7 +774,7 @@ def send_action(action: dict) -> dict:
 
 ### Observation Reading (LeKiwi.get_observation)
 
-[lekiwi.py:485-528](lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi.py#L485-L528)
+[lekiwi.py:485-528](src/lerobot/robots/alohamini/lekiwi.py#L485-L528)
 
 ```python
 def get_observation() -> dict:
@@ -887,7 +887,7 @@ def get_observation() -> dict:
 
 ### Voice Command Examples
 
-**Sticky Height Commands** ([voice_exec.py:188-219](lerobot_alohamini/examples/alohamini/voice_exec.py#L188-L219)):
+**Sticky Height Commands** ([voice_exec.py:188-219](examples/alohamini/voice_exec.py#L188-L219)):
 
 | Voice Input              | Parsed Action                          |
 |--------------------------|----------------------------------------|
@@ -896,7 +896,7 @@ def get_observation() -> dict:
 | "raise to 200 mm"        | `{"__sticky_z_mm": 200.0}`            |
 | "取消高度"               | `{"__cancel_z": True}`                |
 
-**Hold Commands** ([voice_exec.py:164-174](lerobot_alohamini/examples/alohamini/voice_exec.py#L164-L174)):
+**Hold Commands** ([voice_exec.py:164-174](examples/alohamini/voice_exec.py#L164-L174)):
 
 | Voice Input              | Parsed Action                                      |
 |--------------------------|----------------------------------------------------|
@@ -904,7 +904,7 @@ def get_observation() -> dict:
 | "左转 两 秒"             | `{kind: "rotate_left", secs: 2.0}`                |
 | "右移 half second"       | `{kind: "right", secs: 0.5}`                      |
 
-**Number Normalization** ([voice_exec.py:127-144](lerobot_alohamini/examples/alohamini/voice_exec.py#L127-L144)):
+**Number Normalization** ([voice_exec.py:127-144](examples/alohamini/voice_exec.py#L127-L144)):
 
 | Input              | Output  |
 |--------------------|---------|
@@ -920,7 +920,7 @@ def get_observation() -> dict:
 
 ### Voice Executor State Machine
 
-[voice_exec.py:261-398](lerobot_alohamini/examples/alohamini/voice_exec.py#L261-L398)
+[voice_exec.py:261-398](examples/alohamini/voice_exec.py#L261-L398)
 
 ```python
 class VoiceExecutor:
@@ -971,7 +971,7 @@ class VoiceExecutor:
             # Launch replay subprocess
             dataset = parsed["__replay"]["dataset"]
             episode = parsed["__replay"]["episode"]
-            cmd = [sys.executable, "lerobot_alohamini/examples/alohamini/replay_bi.py",
+            cmd = [sys.executable, "examples/alohamini/replay_bi.py",
                    "--dataset", dataset, "--episode", str(episode)]
             subprocess.Popen(cmd)
 
@@ -1015,7 +1015,7 @@ Recording means capturing synchronized (observation, action) pairs during teleop
 
 ### Recording Workflow
 
-[record_bi.py:1-148](lerobot_alohamini/examples/alohamini/record_bi.py#L1-L148)
+[record_bi.py:1-148](examples/alohamini/record_bi.py#L1-L148)
 
 ```
 1. Setup
@@ -1098,7 +1098,7 @@ Each frame contains:
 
 ### Normalization Stats
 
-Computed from entire dataset ([datasets/compute_stats.py](lerobot_alohamini/src/lerobot/datasets/compute_stats.py)):
+Computed from entire dataset ([datasets/compute_stats.py](src/lerobot/datasets/compute_stats.py)):
 
 ```python
 {
@@ -1161,14 +1161,14 @@ Optional (Sim):
 ### Internal Module Dependencies
 
 ```
-lerobot_alohamini/examples/alohamini/
-  └─► lerobot_alohamini/src/lerobot/
+examples/alohamini/
+  └─► src/lerobot/
       ├─► robots/
       │   ├─► alohamini/ (LeKiwi, LeKiwiClient, LeKiwiHost, LiftAxis)
-      │   └─► bi_so100_follower/ (BiSO100Follower)
+      │   └─► bi_so_follower/ (BiSOFollower)
       │
       ├─► teleoperators/
-      │   ├─► bi_so100_leader/ (BiSO100Leader)
+      │   ├─► bi_so_leader/ (BiSOLeader)
       │   └─► keyboard/ (KeyboardTeleop)
       │
       ├─► motors/
@@ -1204,7 +1204,7 @@ lerobot_alohamini/examples/alohamini/
 ```
 Required:
   - LeKiwiClient (ZMQ)
-  - BiSO100Leader (pyserial)
+  - BiSOLeader (pyserial)
   - KeyboardTeleop (stdlib)
   - numpy, opencv-python
 
@@ -1247,10 +1247,10 @@ Required:
 **Why ZMQ instead of gRPC?**
 - ZMQ is lightweight and has built-in CONFLATE mode (keeps only latest message)
 - No RPC overhead; just raw message passing
-- TODO comment in [lekiwi_client.py:15](lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi_client.py#L15) suggests gRPC may be considered later
+- TODO comment in [lekiwi_client.py:15](src/lerobot/robots/alohamini/lekiwi_client.py#L15) suggests gRPC may be considered later
 
 **Image Encoding**:
-- Images encoded to **JPEG base64** before sending over ZMQ ([lekiwi_host.py:104-108](lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi_host.py#L104-L108))
+- Images encoded to **JPEG base64** before sending over ZMQ ([lekiwi_host.py:104-108](src/lerobot/robots/alohamini/lekiwi_host.py#L104-L108))
 - Quality: 90%
 - Reason: Reduce bandwidth, avoid numpy serialization overhead
 - Trade-off: Lossy compression, CPU overhead
@@ -1258,20 +1258,20 @@ Required:
 ### Asynchronous Behavior
 
 **Camera Async Read**:
-- [lekiwi.py:524](lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi.py#L524): `cam.async_read()`
+- [lekiwi.py:524](src/lerobot/robots/alohamini/lekiwi.py#L524): `cam.async_read()`
 - Cameras read in separate threads to avoid blocking main loop
 - Latest frame returned immediately
 
 **Voice ASR Thread**:
-- [voice_engine_gummy.py:292-293](lerobot_alohamini/examples/alohamini/voice_engine_gummy.py#L292-L293): `_worker = threading.Thread(..., daemon=True)`
+- [voice_engine_gummy.py:292-293](examples/alohamini/voice_engine_gummy.py#L292-L293): `_worker = threading.Thread(..., daemon=True)`
 - Audio I/O and ASR run in background thread
 - Main loop polls `get_text_nowait()` without blocking
 
 ### Timing and Performance
 
 **Main Loop Frequency**:
-- **Client (teleoperate)**: 30 Hz ([teleoperate_bi_voice.py:105](lerobot_alohamini/examples/alohamini/teleoperate_bi_voice.py#L105))
-- **Server (host)**: 30 Hz ([lekiwi_host.py:76, 121](lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi_host.py#L76))
+- **Client (teleoperate)**: 30 Hz ([teleoperate_bi_voice.py:105](examples/alohamini/teleoperate_bi_voice.py#L105))
+- **Server (host)**: 30 Hz ([lekiwi_host.py:76, 121](src/lerobot/robots/alohamini/lekiwi_host.py#L76))
 - **Lift axis P-controller**: Called every frame (30-100 Hz recommended)
 
 **Precise Sleep**:
@@ -1285,29 +1285,29 @@ Required:
 
 ### Safety Mechanisms
 
-**Overcurrent Protection** ([lekiwi.py:601-650](lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi.py#L601-L650)):
+**Overcurrent Protection** ([lekiwi.py:601-650](src/lerobot/robots/alohamini/lekiwi.py#L601-L650)):
 - **Debouncing**: Requires **20 consecutive** reads > 2000 mA
 - Prevents false triggers from motor spikes
 - Action: Stops base, disconnects robot, exits program
 
-**Watchdog** ([lekiwi_host.py:91-96](lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi_host.py#L91-L96)):
+**Watchdog** ([lekiwi_host.py:91-96](src/lerobot/robots/alohamini/lekiwi_host.py#L91-L96)):
 - Triggers if no command for >1.5 seconds
 - **Only stops base wheels**, not arms
 - Reason: Arms in position mode (hold last position), base in velocity mode (would drift)
 
-**Max Relative Target** ([lekiwi.py:567-575](lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi.py#L567-L575)):
+**Max Relative Target** ([lekiwi.py:567-575](src/lerobot/robots/alohamini/lekiwi.py#L567-L575)):
 - Caps magnitude of position change per step
 - Prevents large sudden jumps (e.g. policy glitches)
 - Trade-off: Slower fps due to extra `sync_read()` to get current position
 
-**Lift Soft Limits** ([lift_axis.py:27-28, 151](lerobot_alohamini/src/lerobot/robots/alohamini/lift_axis.py#L27-L28)):
+**Lift Soft Limits** ([lift_axis.py:27-28, 151](src/lerobot/robots/alohamini/lift_axis.py#L27-L28)):
 - Range: 0-600 mm
 - Enforced in `set_height_target_mm()`
 - Note: **No hard stops** on actual hardware (relies on software limits)
 
 ### Motor Normalization Modes
 
-[lekiwi.py:59](lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi.py#L59)
+[lekiwi.py:59](src/lerobot/robots/alohamini/lekiwi.py#L59)
 
 ```python
 norm_mode = MotorNormMode.DEGREES if config.use_degrees else MotorNormMode.RANGE_M100_100
@@ -1320,11 +1320,11 @@ norm_mode = MotorNormMode.DEGREES if config.use_degrees else MotorNormMode.RANGE
 **Why M100_100?**
 - Simplifies neural network training (bounded range)
 - Avoids wraparound issues with degrees
-- Default: `use_degrees=False` ([config_lekiwi.py:58](lerobot_alohamini/src/lerobot/robots/alohamini/config_lekiwi.py#L58))
+- Default: `use_degrees=False` ([config_lekiwi.py:58](src/lerobot/robots/alohamini/config_lekiwi.py#L58))
 
 **Gripper Exception**:
 - Always `RANGE_0_100` (0 = open, 100 = closed)
-- [lekiwi.py:72, 92](lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi.py#L72)
+- [lekiwi.py:72, 92](src/lerobot/robots/alohamini/lekiwi.py#L72)
 
 ### Coordinate Frames
 
@@ -1334,18 +1334,18 @@ norm_mode = MotorNormMode.DEGREES if config.use_degrees else MotorNormMode.RANGE
 - Keyboard/voice commands are in body frame
 
 **Wheel Angles**:
-- [lekiwi.py:400](lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi.py#L400): `angles = [240°, 0°, 120°] - 90°`
+- [lekiwi.py:400](src/lerobot/robots/alohamini/lekiwi.py#L400): `angles = [240°, 0°, 120°] - 90°`
 - Final: `[150°, 270°, 30°]` (relative to robot +x axis)
 - Matches physical mounting on AlohaMini chassis
 
 **Lift Axis Direction**:
-- [lift_axis.py:40](lerobot_alohamini/src/lerobot/robots/alohamini/lift_axis.py#L40): `dir_sign = -1`
+- [lift_axis.py:40](src/lerobot/robots/alohamini/lift_axis.py#L40): `dir_sign = -1`
 - Inverts motor direction (positive command → upward motion)
 - Hardware-specific: depends on motor mounting
 
 ### Dual-Bus Calibration
 
-[lekiwi.py:200-301](lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi.py#L200-L301)
+[lekiwi.py:200-301](src/lerobot/robots/alohamini/lekiwi.py#L200-L301)
 
 **Challenge**: Two motor buses (left and right), but single calibration file.
 
@@ -1364,7 +1364,7 @@ norm_mode = MotorNormMode.DEGREES if config.use_degrees else MotorNormMode.RANGE
 
  
 
-[voice_exec.py:327-336](lerobot_alohamini/examples/alohamini/voice_exec.py#L327-L336)
+[voice_exec.py:327-336](examples/alohamini/voice_exec.py#L327-L336)
 
 **Feature**: Voice command "锤他" / "chui ta" / "hammer him" launches replay subprocess.
 
@@ -1373,7 +1373,7 @@ norm_mode = MotorNormMode.DEGREES if config.use_degrees else MotorNormMode.RANGE
 if "__replay" in parsed:
     dataset = parsed["__replay"]["dataset"]
     episode = parsed["__replay"]["episode"]
-    cmd = [sys.executable, "lerobot_alohamini/examples/alohamini/replay_bi.py",
+    cmd = [sys.executable, "examples/alohamini/replay_bi.py",
            "--dataset", dataset, "--episode", str(episode)]
     subprocess.Popen(cmd, cwd="/home/worker/lerobot_alohamini")
 ```
@@ -1384,14 +1384,14 @@ if "__replay" in parsed:
 - **No error handling**: If replay fails, no feedback to user
 - **Concurrent execution**: Multiple replays can run simultaneously (no lock)
 
-**Cooldown** ([voice_exec.py:269-270](lerobot_alohamini/examples/alohamini/voice_exec.py#L269-L270)):
+**Cooldown** ([voice_exec.py:269-270](examples/alohamini/voice_exec.py#L269-L270)):
 - `_last_replay_ts` tracks last trigger
 - 2-second cooldown prevents accidental repeats
 - Note: Currently **not enforced** in code (TODO?)
 
 ### Cameras Disabled by Default
 
-[config_lekiwi.py:23-40](lerobot_alohamini/src/lerobot/robots/alohamini/config_lekiwi.py#L23-L40)
+[config_lekiwi.py:23-40](src/lerobot/robots/alohamini/config_lekiwi.py#L23-L40)
 
 All camera configs are **commented out**.
 
@@ -1416,55 +1416,55 @@ All camera configs are **commented out**.
 
 | File | Purpose | Key Functions/Classes |
 |------|---------|----------------------|
-| [lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi.py](lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi.py) | Server-side robot controller | `LeKiwi`, `connect()`, `calibrate()`, `get_observation()`, `send_action()`, `_body_to_wheel_raw()`, `_wheel_raw_to_body()` |
-| [lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi_client.py](lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi_client.py) | Client-side remote interface | `LeKiwiClient`, `connect()`, `get_observation()`, `send_action()`, `_from_keyboard_to_base_action()`, `_from_keyboard_to_lift_action()` |
-| [lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi_host.py](lerobot_alohamini/src/lerobot/robots/alohamini/lekiwi_host.py) | ZMQ server wrapper | `LeKiwiHost`, `main()` (main loop with watchdog) |
-| [lerobot_alohamini/src/lerobot/robots/alohamini/lift_axis.py](lerobot_alohamini/src/lerobot/robots/alohamini/lift_axis.py) | Z-axis lift controller | `LiftAxis`, `home()`, `update()`, `set_height_target_mm()`, `get_height_mm()` |
-| [lerobot_alohamini/src/lerobot/robots/alohamini/config_lekiwi.py](lerobot_alohamini/src/lerobot/robots/alohamini/config_lekiwi.py) | Configuration dataclasses | `LeKiwiConfig`, `LeKiwiClientConfig`, `LeKiwiHostConfig` |
+| [src/lerobot/robots/alohamini/lekiwi.py](src/lerobot/robots/alohamini/lekiwi.py) | Server-side robot controller | `LeKiwi`, `connect()`, `calibrate()`, `get_observation()`, `send_action()`, `_body_to_wheel_raw()`, `_wheel_raw_to_body()` |
+| [src/lerobot/robots/alohamini/lekiwi_client.py](src/lerobot/robots/alohamini/lekiwi_client.py) | Client-side remote interface | `LeKiwiClient`, `connect()`, `get_observation()`, `send_action()`, `_from_keyboard_to_base_action()`, `_from_keyboard_to_lift_action()` |
+| [src/lerobot/robots/alohamini/lekiwi_host.py](src/lerobot/robots/alohamini/lekiwi_host.py) | ZMQ server wrapper | `LeKiwiHost`, `main()` (main loop with watchdog) |
+| [src/lerobot/robots/alohamini/lift_axis.py](src/lerobot/robots/alohamini/lift_axis.py) | Z-axis lift controller | `LiftAxis`, `home()`, `update()`, `set_height_target_mm()`, `get_height_mm()` |
+| [src/lerobot/robots/alohamini/config_lekiwi.py](src/lerobot/robots/alohamini/config_lekiwi.py) | Configuration dataclasses | `LeKiwiConfig`, `LeKiwiClientConfig`, `LeKiwiHostConfig` |
 
 ### Example Scripts
 
 | File | Purpose | Entry Point |
 |------|---------|-------------|
-| [lerobot_alohamini/examples/alohamini/teleoperate_bi_voice.py](lerobot_alohamini/examples/alohamini/teleoperate_bi_voice.py) | Bimanual teleoperation + voice | Lines 77-105 (main loop) |
-| [lerobot_alohamini/examples/alohamini/record_bi.py](lerobot_alohamini/examples/alohamini/record_bi.py) | Record teleoperation episodes | Lines 90-143 (episode loop) |
-| [lerobot_alohamini/examples/alohamini/evaluate_bi.py](lerobot_alohamini/examples/alohamini/evaluate_bi.py) | Run pretrained policy | Lines 71-98 (eval loop) |
-| [lerobot_alohamini/examples/alohamini/replay_bi.py](lerobot_alohamini/examples/alohamini/replay_bi.py) | Replay recorded episodes | (Not read yet, but similar structure) |
+| [examples/alohamini/teleoperate_bi_voice.py](examples/alohamini/teleoperate_bi_voice.py) | Bimanual teleoperation + voice | Lines 77-105 (main loop) |
+| [examples/alohamini/record_bi.py](examples/alohamini/record_bi.py) | Record teleoperation episodes | Lines 90-143 (episode loop) |
+| [examples/alohamini/evaluate_bi.py](examples/alohamini/evaluate_bi.py) | Run pretrained policy | Lines 71-98 (eval loop) |
+| [examples/alohamini/replay_bi.py](examples/alohamini/replay_bi.py) | Replay recorded episodes | (Not read yet, but similar structure) |
 
 ### Voice Control
 
 | File | Purpose | Key Functions/Classes |
 |------|---------|----------------------|
-| [lerobot_alohamini/examples/alohamini/voice_engine_gummy.py](lerobot_alohamini/examples/alohamini/voice_engine_gummy.py) | Speech recognition engine | `SpeechEngineGummy`, `start()`, `stop()`, `get_text_nowait()`, `_run()` (VAD loop), `_GummyOneShot` |
-| [lerobot_alohamini/examples/alohamini/voice_exec.py](lerobot_alohamini/examples/alohamini/voice_exec.py) | Command parser + executor | `VoiceExecutor`, `parse_command()`, `handle_text()`, `get_action_nowait()`, `normalize_number()` |
+| [examples/alohamini/voice_engine_gummy.py](examples/alohamini/voice_engine_gummy.py) | Speech recognition engine | `SpeechEngineGummy`, `start()`, `stop()`, `get_text_nowait()`, `_run()` (VAD loop), `_GummyOneShot` |
+| [examples/alohamini/voice_exec.py](examples/alohamini/voice_exec.py) | Command parser + executor | `VoiceExecutor`, `parse_command()`, `handle_text()`, `get_action_nowait()`, `normalize_number()` |
 
 ### Motor and Hardware
 
 | File | Purpose | Key Functions/Classes |
 |------|---------|----------------------|
-| [lerobot_alohamini/src/lerobot/motors/feetech/feetech.py](lerobot_alohamini/src/lerobot/motors/feetech/feetech.py) | Feetech motor bus driver | `FeetechMotorsBus`, `connect()`, `sync_read()`, `sync_write()`, `calibrate()` |
-| [lerobot_alohamini/src/lerobot/cameras/opencv/camera_opencv.py](lerobot_alohamini/src/lerobot/cameras/opencv/camera_opencv.py) | OpenCV camera wrapper | `OpenCVCamera`, `connect()`, `async_read()` |
+| [src/lerobot/motors/feetech/feetech.py](src/lerobot/motors/feetech/feetech.py) | Feetech motor bus driver | `FeetechMotorsBus`, `connect()`, `sync_read()`, `sync_write()`, `calibrate()` |
+| [src/lerobot/cameras/opencv/camera_opencv.py](src/lerobot/cameras/opencv/camera_opencv.py) | OpenCV camera wrapper | `OpenCVCamera`, `connect()`, `async_read()` |
 
 ### Teleoperators
 
 | File | Purpose | Key Functions/Classes |
 |------|---------|----------------------|
-| [lerobot_alohamini/src/lerobot/teleoperators/bi_so100_leader/bi_so100_leader.py](lerobot_alohamini/src/lerobot/teleoperators/bi_so100_leader/bi_so100_leader.py) | Bimanual leader arms | `BiSO100Leader`, `connect()`, `get_action()` |
-| [lerobot_alohamini/src/lerobot/teleoperators/keyboard/teleop_keyboard.py](lerobot_alohamini/src/lerobot/teleoperators/keyboard/teleop_keyboard.py) | Keyboard teleoperation | `KeyboardTeleop`, `connect()`, `get_action()` |
+| [src/lerobot/teleoperators/bi_so_leader/bi_so_leader.py](src/lerobot/teleoperators/bi_so_leader/bi_so_leader.py) | Bimanual leader arms | `BiSOLeader`, `connect()`, `get_action()` |
+| [src/lerobot/teleoperators/keyboard/teleop_keyboard.py](src/lerobot/teleoperators/keyboard/teleop_keyboard.py) | Keyboard teleoperation | `KeyboardTeleop`, `connect()`, `get_action()` |
 
 ### Dataset and Recording
 
 | File | Purpose | Key Functions/Classes |
 |------|---------|----------------------|
-| [lerobot_alohamini/src/lerobot/datasets/lerobot_dataset.py](lerobot_alohamini/src/lerobot/datasets/lerobot_dataset.py) | Dataset management | `LeRobotDataset`, `create()`, `add_frame()`, `save_episode()`, `push_to_hub()` |
-| [lerobot_alohamini/src/lerobot/scripts/lerobot_record.py](lerobot_alohamini/src/lerobot/scripts/lerobot_record.py) | Recording loop implementation | `record_loop()` |
+| [src/lerobot/datasets/lerobot_dataset.py](src/lerobot/datasets/lerobot_dataset.py) | Dataset management | `LeRobotDataset`, `create()`, `add_frame()`, `save_episode()`, `push_to_hub()` |
+| [src/lerobot/scripts/lerobot_record.py](src/lerobot/scripts/lerobot_record.py) | Recording loop implementation | `record_loop()` |
 
 ### Policies
 
 | File | Purpose | Key Functions/Classes |
 |------|---------|----------------------|
-| [lerobot_alohamini/src/lerobot/policies/act/modeling_act.py](lerobot_alohamini/src/lerobot/policies/act/modeling_act.py) | ACT policy implementation | `ACTPolicy`, `forward()`, `from_pretrained()` |
-| [lerobot_alohamini/src/lerobot/policies/factory.py](lerobot_alohamini/src/lerobot/policies/factory.py) | Policy factory and processors | `make_pre_post_processors()` |
+| [src/lerobot/policies/act/modeling_act.py](src/lerobot/policies/act/modeling_act.py) | ACT policy implementation | `ACTPolicy`, `forward()`, `from_pretrained()` |
+| [src/lerobot/policies/factory.py](src/lerobot/policies/factory.py) | Policy factory and processors | `make_pre_post_processors()` |
 
 ---
 
@@ -1479,7 +1479,7 @@ python -m lerobot.robots.alohamini.lekiwi_host
 
 # On laptop:
 cd /path/to/lerobot_alohamini
-python lerobot_alohamini/examples/alohamini/teleoperate_bi_voice.py --remote_ip 192.168.x.x
+python examples/alohamini/teleoperate_bi_voice.py --remote_ip 192.168.x.x
 ```
 
 **Controls**:
@@ -1490,7 +1490,7 @@ python lerobot_alohamini/examples/alohamini/teleoperate_bi_voice.py --remote_ip 
 ### B. Recording a Dataset
 
 ```bash
-python lerobot_alohamini/examples/alohamini/record_bi.py \
+python examples/alohamini/record_bi.py \
     --dataset username/my_dataset \
     --num_episodes 50 \
     --fps 30 \
@@ -1502,7 +1502,7 @@ python lerobot_alohamini/examples/alohamini/record_bi.py \
 
 **Resume existing dataset**:
 ```bash
-python lerobot_alohamini/examples/alohamini/record_bi.py \
+python examples/alohamini/record_bi.py \
     --dataset username/my_dataset \
     --resume \
     --num_episodes 10
@@ -1511,7 +1511,7 @@ python lerobot_alohamini/examples/alohamini/record_bi.py \
 ### C. Evaluating a Policy
 
 ```bash
-python lerobot_alohamini/examples/alohamini/evaluate_bi.py \
+python examples/alohamini/evaluate_bi.py \
     --hf_model_id username/my_trained_policy \
     --hf_dataset_id username/my_eval_dataset \
     --num_episodes 10 \

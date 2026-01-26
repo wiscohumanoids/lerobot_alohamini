@@ -85,7 +85,7 @@ AlohaMini is a bimanual mobile manipulation robot with a mature **teleoperation 
 ### 1. Enable Vision System
 
 **Camera Configuration**
-- Code exists for OpenCV cameras in [`lerobot_alohamini/src/lerobot/robots/alohamini/config_lekiwi.py`](lerobot_alohamini/src/lerobot/robots/alohamini/config_lekiwi.py)
+- Code exists for OpenCV cameras in [`src/lerobot/robots/alohamini/config_lekiwi.py`](src/lerobot/robots/alohamini/config_lekiwi.py)
 - Currently disabled with `cameras={}` - needs device paths and calibration
 - Enable by adding camera configurations (device IDs, resolution, FPS)
 
@@ -106,7 +106,7 @@ AlohaMini is a bimanual mobile manipulation robot with a mature **teleoperation 
    - Each demo includes: joint states, actions, camera RGB frames, timestamps
 
 2. **Upload to HuggingFace Hub**
-   - Use LeRobot's `push_dataset_to_hub` tools in [`lerobot_alohamini/src/lerobot/datasets/`](lerobot_alohamini/src/lerobot/datasets/)
+   - Use LeRobot's `push_dataset_to_hub` tools in [`src/lerobot/datasets/`](src/lerobot/datasets/)
    - Dataset format is already compatible with LeRobot training
    - Include episode metadata and task description
 
@@ -121,7 +121,7 @@ AlohaMini is a bimanual mobile manipulation robot with a mature **teleoperation 
      - More robust to distribution shift
      - Recommended for mobile base + arm coordination
 
-   - Use training scripts in [`lerobot_alohamini/examples/training/`](lerobot_alohamini/examples/training/)
+   - Use training scripts in [`examples/training/`](examples/training/)
    - Training typically requires 50K-200K gradient steps
    - Monitor validation loss and success rate on held-out episodes
 
@@ -209,7 +209,7 @@ AlohaMini is a bimanual mobile manipulation robot with a mature **teleoperation 
 
 For teams ready to start training policies:
 
-1. **Enable cameras** in [lerobot_alohamini/src/lerobot/robots/alohamini/config_lekiwi.py](lerobot_alohamini/src/lerobot/robots/alohamini/config_lekiwi.py)
+1. **Enable cameras** in [src/lerobot/robots/alohamini/config_lekiwi.py](src/lerobot/robots/alohamini/config_lekiwi.py)
 2. **Collect 50-100 demos** of your target task using `teleoperate_bi_voice.py` with recording
 3. **Upload dataset** to HuggingFace Hub using LeRobot tools
 4. **Train ACT or Diffusion policy** on your dataset

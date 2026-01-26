@@ -5,7 +5,7 @@ set -e  # Exit on error
 
 # Detect script directory and project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"  # Go up to lerobot_alohamini/
 
 # Configuration
 IMAGE_NAME="alohamini"

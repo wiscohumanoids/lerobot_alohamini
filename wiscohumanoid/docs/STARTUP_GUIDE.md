@@ -37,8 +37,12 @@ This guide helps new team members get up and running with the AlohaMini codebase
 
 ```bash
 # Clone the AlohaMini repository
-git clone https://github.com/wiscohumanoids/alohamini.git
+git clone https://github.com/wiscohumanoids/lerobot_alohamini.git
 cd alohamini
+
+# Checkout to our club's branch
+git checkout wiscohumanoids
+cd wiscohumanoids
 ```
 
 ### Step 2: Build Docker Image
@@ -94,7 +98,7 @@ ls -lh docs/*.md
 **Start with `docker/run.sh`** (interactive terminal):
 ```bash
 # go into root directory
-cd /workspace/
+cd /lerobot_alohamini/wiscohumanoids
 # Start Jupyter from inside container
 jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token='' --NotebookApp.password=''
 
@@ -111,7 +115,7 @@ The Docker container allows you to explore the codebase safely without physical 
 
 ```bash
 # Navigate to robot implementation
-cd lerobot_alohamini/src/lerobot/robots/alohamini
+cd /workspace/src/lerobot/robots/alohamini
 ls -lh
 
 # View core robot controller
@@ -137,7 +141,6 @@ config = LeKiwiConfig()
 # Inspect settings
 print(f"Left bus port: {config.left_port}")
 print(f"Right bus port: {config.right_port}")
-print(f"Disable torque on disconnect: {config.disable_torque_on_disconnect}")
 print(f"Cameras configured: {list(config.cameras.keys())}")  # Will be empty (disabled by default)
 
 exit()
@@ -147,7 +150,7 @@ exit()
 
 ```bash
 # Navigate to examples
-cd lerobot_alohamini/examples/alohamini
+cd /workspace/examples/alohamini
 
 # List available examples
 ls -lh
@@ -163,7 +166,7 @@ cat voice_exec.py | less
 
 ```bash
 # Navigate to dataset examples
-cd /workspace/lerobot_alohamini/examples/dataset
+cd /workspace/examples/dataset
 
 # View dataset loading example
 cat load_lerobot_dataset.py
@@ -176,7 +179,7 @@ cat use_dataset_tools.py
 
 ```bash
 # List all lerobot CLI scripts
-ls -lh /workspace/lerobot_alohamini/src/lerobot/scripts/
+ls -lh /workspace/src/lerobot/scripts/
 
 # View help for dataset visualization
 python -m lerobot.scripts.lerobot_dataset_viz --help
