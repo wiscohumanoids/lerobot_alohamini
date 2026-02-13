@@ -63,6 +63,9 @@ class LiftAxis:
         # Zero reference (extended angle)
         self._z0_deg: float = 0.0
 
+        # Target (non-blocking)
+        self._target_mm: float = 0.0
+
         self._configured = False
 
     def attach(self) -> None:
@@ -183,6 +186,7 @@ class LiftAxis:
             self._bus.write("Goal_Velocity", self.cfg.name, int(self.cfg.dir_sign * v_cmd))
         if key_v in action:
             # Direct velocity clears height target
+            self._target_mm = None
             v = int(action[key_v])
             v = max(-self.cfg.v_max, min(self.cfg.v_max, v))
             # Limit if already at boundary

@@ -38,44 +38,44 @@ AlohaMini is a **bimanual mobile manipulation robot** built on the LeRobot frame
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      LAPTOP (Client Side)                        │
-│                                                                   │
+│                      LAPTOP (Client Side)                       │
+│                                                                 │
 │  ┌─────────────────────────────────────────────────────────────┐│
-│  │ examples/alohamini/teleoperate_bi_voice.py                   ││
-│  │   - Main control loop (30 Hz)                                ││
-│  │   - Action merging from multiple sources                     ││
+│  │ examples/alohamini/teleoperate_bi_voice.py                  ││
+│  │   - Main control loop (30 Hz)                               ││
+│  │   - Action merging from multiple sources                    ││
 │  └─────────────────────────────────────────────────────────────┘│
-│                                                                   │
+│                                                                 │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────┐ │
-│  │ BiSOLeader    │  │ KeyboardTeleop   │  │ Voice System   │ │
+│  │ BiSOLeader       │  │ KeyboardTeleop   │  │ Voice System   │ │
 │  │ (USB Serial)     │  │ (stdin)          │  │ (Microphone)   │ │
 │  │                  │  │                  │  │                │ │
-│  │ /dev/am_arm_     │  │ w/s/a/d/z/x     │  │ Gummy ASR →    │ │
+│  │ /dev/am_arm_     │  │ w/s/a/d/z/x      │  │ Gummy ASR →    │ │
 │  │ leader_left      │  │ u/j (lift)       │  │ VoiceExecutor  │ │
 │  │ leader_right     │  │ r/f (speed)      │  │                │ │
 │  └──────────────────┘  └──────────────────┘  └────────────────┘ │
-│                                                                   │
+│                                                                 │
 │  ┌─────────────────────────────────────────────────────────────┐│
-│  │ LeKiwiClient (ZMQ PUSH/PULL)                                 ││
-│  │   - Sends actions via ZMQ                                    ││
-│  │   - Receives observations (state + base64 images)            ││
+│  │ LeKiwiClient (ZMQ PUSH/PULL)                                ││
+│  │   - Sends actions via ZMQ                                   ││
+│  │   - Receives observations (state + base64 images)           ││
 │  └─────────────────────────────────────────────────────────────┘│
 └───────────────────────────────┬─────────────────────────────────┘
                                 │ ZMQ over TCP
                                 │ (cmd: 5555, obs: 5556)
 ┌───────────────────────────────▼─────────────────────────────────┐
-│                      ROBOT (AlohaMini Hardware)                  │
-│                                                                   │
+│                      ROBOT (AlohaMini Hardware)                 │
+│                                                                 │
 │  ┌─────────────────────────────────────────────────────────────┐│
-│  │ LeKiwiHost (ZMQ Server)                                      ││
-│  │   - Receives action commands                                 ││
-│  │   - Publishes observations                                   ││
+│  │ LeKiwiHost (ZMQ Server)                                     ││
+│  │   - Receives action commands                                ││
+│  │   - Publishes observations                                  ││
 │  │   - Watchdog: stops base if no cmd > 1.5s                   ││
 │  └─────────────────────────────────────────────────────────────┘│
-│                                                                   │
+│                                                                 │
 │  ┌─────────────────────────────────────────────────────────────┐│
-│  │ LeKiwi (Robot Controller)                                    ││
-│  │                                                               ││
+│  │ LeKiwi (Robot Controller)                                   ││
+│  │                                                             ││
 │  │  ┌───────────────────────────┐  ┌──────────────────────────┐││
 │  │  │ Left Motor Bus (Feetech)  │  │ Right Motor Bus (Feetech)│││
 │  │  │ /dev/am_arm_follower_left │  │ /dev/am_arm_follower_rt  │││
@@ -84,15 +84,15 @@ AlohaMini is a **bimanual mobile manipulation robot** built on the LeRobot frame
 │  │  │ - Base wheels (IDs 8-10)  │  │                          │││
 │  │  │ - Lift motor (ID 11)      │  │                          │││
 │  │  └───────────────────────────┘  └──────────────────────────┘││
-│  │                                                               ││
+│  │                                                             ││
 │  │  ┌─────────────────────────────────────────────────────────┐││
-│  │  │ LiftAxis Controller                                      │││
+│  │  │ LiftAxis Controller                                     │││
 │  │  │   - Multi-turn tracking (-∞ to +∞ degrees)              │││
-│  │  │   - Velocity mode with P-controller                      │││
-│  │  │   - Homing to hard stop on startup                       │││
+│  │  │   - Velocity mode with P-controller                     │││
+│  │  │   - Homing to hard stop on startup                      │││
 │  │  └─────────────────────────────────────────────────────────┘││
 │  └─────────────────────────────────────────────────────────────┘│
-└───────────────────────────────────────────────────────────────────┘
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ### Naming: AlohaMini vs LeKiwi

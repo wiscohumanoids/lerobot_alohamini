@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 from dataclasses import dataclass, field
 
 from lerobot.cameras.configs import CameraConfig, Cv2Rotation
@@ -20,8 +21,10 @@ from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig
 from ..config import RobotConfig
 
 
+
 def lekiwi_cameras_config() -> dict[str, CameraConfig]:
     return {
+        # might need to comment all of these out
         "head_top": OpenCVCameraConfig(
             index_or_path="/dev/am_camera_head_top", fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION
         ),
@@ -43,8 +46,8 @@ def lekiwi_cameras_config() -> dict[str, CameraConfig]:
 @RobotConfig.register_subclass("lekiwi")
 @dataclass
 class LeKiwiConfig(RobotConfig):
-    left_port: str = "/dev/am_arm_follower_left"  # port to connect to the bus
-    right_port: str = "/dev/am_arm_follower_right"  # port to connect to the bus
+    left_port: str = os.getenv("LEKIWI_LEFT_PORT", "/dev/am_arm_follower_left")  # port to connect to the bus
+    right_port: str = os.getenv("LEKIWI_RIGHT_PORT", "/dev/am_arm_follower_right")  # port to connect to the bus
     disable_torque_on_disconnect: bool = True
 
     # `max_relative_target` limits the magnitude of the relative positional target vector for safety purposes.
@@ -91,10 +94,10 @@ class LeKiwiClientConfig(RobotConfig):
             # Movement
             "forward": "w",
             "backward": "s",
-            "left": "z",
-            "right": "x",
-            "rotate_left": "a",
-            "rotate_right": "d",
+            "left": "a",
+            "right": "d",
+            "rotate_left": "z",
+            "rotate_right": "x",
             # Speed control
             "speed_up": "r",
             "speed_down": "f",

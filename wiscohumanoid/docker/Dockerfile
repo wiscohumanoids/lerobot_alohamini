@@ -37,6 +37,8 @@ RUN apt-get update && apt-get install -y \
     # OpenCV dependencies
     libopencv-dev \
     libgl1-mesa-glx \
+    libgl1-mesa-dev \
+    libx11-6 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
@@ -68,6 +70,12 @@ RUN apt-get update && apt-get install -y \
     htop \
     tmux \
     screen \
+    \
+    # X server suport 
+    libxkbcommon-x11-0 \
+    libxcb-xinerama0 \
+    libx11-6 \
+    vulkan-tools \
     && rm -rf /var/lib/apt/lists/*
 
 # Create symbolic link for python
@@ -103,6 +111,9 @@ RUN pip install --no-cache-dir \
     jupyterlab \
     ipywidgets \
     notebook
+
+# Install Feetech servo sdk for motor control, leader arms
+RUN pip install feetech-servo-sdk
 
 # Expose ports
 # 8888: Jupyter Notebook/Lab

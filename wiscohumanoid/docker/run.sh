@@ -47,6 +47,9 @@ if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
     docker rm "${CONTAINER_NAME}" > /dev/null 2>&1 || true
 fi
 
+XSOCK=/tmp/.X11-unix
+XAUTH=/tmp/.docker.xauth
+
 # Common Docker run arguments
 DOCKER_ARGS=(
     --name "${CONTAINER_NAME}"
@@ -57,8 +60,18 @@ DOCKER_ARGS=(
     -p 8888:8888
     -p 5555:5555
     -p 5556:5556
+    -v "/tmp/.X11-unix:/tmp/.X11-unix"
     -e "DISPLAY=${DISPLAY:-:0}"
     -e "PYTHONPATH=/workspace/src"
+    -v $XSOCK:$XSOCK \
+    -v $XAUTH:$XAUTH \
+    -e XAUTHORITY=$XAUTH \
+    -e XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR \
+    -v $XDG_RUNTIME_DIR:$XDG_RUNTIME_DIR \
+    -e NVIDIA_DRIVER_CAPABILITIES=all \
+    --runtime=nvidia \
+
+    --gpus all
 )
 
 # Add device passthrough if devices exist (for hardware deployment)
@@ -84,6 +97,7 @@ if [ -d "/dev" ]; then
         DOCKER_ARGS+=(--device=/dev/snd)
     fi
 fi
+
 
 # Run container based on mode
 if [ "${MODE}" == "jupyter" ]; then

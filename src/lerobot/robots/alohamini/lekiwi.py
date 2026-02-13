@@ -36,7 +36,7 @@ from lerobot.motors.feetech import (
 
 from ..robot import Robot
 from ..utils import ensure_safe_goal_position
-from .config_lekiwi import LeKiwiConfig
+from .config_lekiwi import LeKiwiConfig, LeKiwiClientConfig
 
 logger = logging.getLogger(__name__)
 
@@ -110,10 +110,10 @@ class LeKiwi(Robot):
 
 
         self.lift = LiftAxis(
-        LiftAxisConfig(),        
-        bus_left=self.left_bus,
-        bus_right=self.right_bus,
-)
+            LiftAxisConfig(),        
+            bus_left=self.left_bus,
+            bus_right=self.right_bus,
+        )
         # Overcurrent debounce: require N consecutive over-limit reads
         self._overcurrent_count: dict[str, int] = {}
         self._overcurrent_trip_n = 20
@@ -187,7 +187,7 @@ class LeKiwi(Robot):
         logger.info(f"{self} connected.")
 
         self.lift.home()
-        print("Lift axis homed to 0mm.")
+        logger.info("Lift axis homed to 0mm.")
 
         
 
@@ -296,9 +296,6 @@ class LeKiwi(Robot):
 
         self._save_calibration()
         print("Calibration saved to", self.calibration_fpath)
-
-
-
 
 
     def configure(self):

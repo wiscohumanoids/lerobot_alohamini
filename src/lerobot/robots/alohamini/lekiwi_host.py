@@ -23,8 +23,12 @@ import sys
 import cv2
 import zmq
 
-from .config_lekiwi import LeKiwiConfig, LeKiwiHostConfig
-from .lekiwi import LeKiwi
+try:
+    from .config_lekiwi import LeKiwiConfig, LeKiwiHostConfig, LeKiwiClientConfig
+    from .lekiwi import LeKiwi
+except ImportError:
+    from config_lekiwi import LeKiwiConfig, LeKiwiHostConfig, LeKiwiClientConfig
+    from lekiwi import LeKiwi
 
 
 class LeKiwiHost:
@@ -34,7 +38,7 @@ class LeKiwiHost:
         self.zmq_cmd_socket.setsockopt(zmq.CONFLATE, 1)
         self.zmq_cmd_socket.bind(f"tcp://*:{config.port_zmq_cmd}")
 
-        self.zmq_observation_socket = self.zmq_context.socket(zmq.PUSH)
+        self.zmq_observation_socket = self.zmq_context.socket(zmq.PUB)
         self.zmq_observation_socket.setsockopt(zmq.CONFLATE, 1)
         self.zmq_observation_socket.bind(f"tcp://*:{config.port_zmq_observations}")
 
@@ -49,7 +53,6 @@ class LeKiwiHost:
  
 
 def main():
-    logging.info("Configuring LeKiwi")
     robot_config = LeKiwiConfig()
     robot_config.id = "AlohaMiniRobot"
     robot = LeKiwi(robot_config)
@@ -95,7 +98,7 @@ def main():
                 watchdog_active = True
                 robot.stop_base()
 
-            
+            robot.lift.update()
             last_observation = robot.get_observation()
 
             # Encode ndarrays to base64 strings
