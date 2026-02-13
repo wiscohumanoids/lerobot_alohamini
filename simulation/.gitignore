@@ -1,1 +1,3 @@
-.venv-win
+# Venv directories
+.venv
+.venv-*

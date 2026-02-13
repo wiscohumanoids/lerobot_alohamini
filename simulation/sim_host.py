@@ -26,8 +26,8 @@ CAM_RESOLUTION = (640, 480)
 FPS = 30
 
 SIM_CONFIG = {
-    "width": 100,#1280,
-    "height": 50,#720,
+    "width": 1280,
+    "height": 720,
     "window_width": 1920,
     "window_height": 1080,
     "headless": False,
@@ -42,69 +42,54 @@ simulation_app = SimulationApp(SIM_CONFIG)
 # Imports after SimulationApp
 import isaacsim.core.utils.prims as prim_utils  # noqa: E402
 import isaacsim.core.utils.stage as stage_utils  # noqa: E402
+import omni.usd
 from omni.isaac.core import World  # noqa: E402
 from omni.isaac.core.articulations import Articulation, ArticulationSubset  # noqa: E402
+from omni.isaac.core.controllers import ArticulationController
 from isaacsim.core.utils.types import ArticulationAction
 from omni.isaac.core.robots import Robot  # noqa: E402
 from omni.kit.commands import execute # noqa: E402
 from isaacsim.core.utils.rotations import euler_angles_to_quat  # noqa: E402
+from omni.isaac.core.utils.stage import add_reference_to_stage
 from isaacsim.sensors.camera import Camera  # noqa: E402
 from pxr import Gf, UsdGeom  # noqa: F401
 
 
-
 class IsaacWorld:
-    def __init__(self, urdf_path: str, verbose=False):
-        log("Creating IsaacSim world...")
+    def __init__(self, usd_path: str, prim_path: str, verbose=False):
+        log("[World] Creating IsaacSim world...")
         self.isaacWorld = World(stage_units_in_meters=1.0)
         self.isaacWorld.scene.add_default_ground_plane()
 
-        self.aloha = AlohaSim(self.isaacWorld, urdf_path, verbose=verbose)
+        add_reference_to_stage(usd_path=usd_path, prim_path=prim_path)
+        log(f"[World] Loaded USD asset from {usd_path} at prim path {prim_path}")
+
+        self.aloha = AlohaSim(self.isaacWorld, prim_path, verbose=verbose)
 
 
 
 class AlohaSim:
-    def __init__(self, world, urdf_path: str, verbose=False):
-        self.urdf_path = urdf_path
+    def __init__(self, world, prim_path: str, verbose=False):
+        self.prim_path = prim_path
         self.cameras = {}
         self.verbose = verbose
-
-        success, import_config = execute("URDFCreateImportConfig")
-        import_config.merge_fixed_joints = False        # TODO: look into exactly what these are
-        import_config.fix_base = False
-        import_config.make_default_prim = False
-        import_config.create_physics_scene = True
-
-        if not success:
-            error("Failed to create import URDF import config! Check installation for proper extensions.")
-            sys.exit(1)
-
-        success, self.prim_path = execute(
-            "URDFParseAndImportFile",
-            urdf_path=self.urdf_path,
-            import_config=import_config
-        )
-        
-        if success:
-            log(f"[Aloha] Imported URDF to prim path: {self.prim_path}")
-            # Assume correct imports and such
-            pass
-        else:
-            error(f"[Aloha] Failed to import URDF from {self.urdf_path}, exiting...")
-            sys.exit(1)
 
         # Add Articulation to robot prim
         log("[Aloha] Setting up sim robot w/ articulation...")
 
+
         self.robot = Articulation(prim_path=self.prim_path, name="Aloha")
-        world.scene.add(self.robot)
-        
+               
         # Add cameras
         self._add_camera("head_front", "/Aloha/base_link/front_cam", np.array([0.2, 0, 0.2]), np.array([0, 0, 0]))
         self._add_camera("head_top", "/Aloha/base_link/top_cam", np.array([0, 0, 0.5]), np.array([0, 90, 0]))
 
+        world.scene.add(self.robot)
         world.reset()
+
         self.robot.initialize()
+
+
         log("[Aloha] Model setup complete, robot and cameras initialized.")
 
         # Add dof names mapping
@@ -164,18 +149,20 @@ class AlohaSim:
                 idx = self.dof_indices[name]
                 target_pos[idx] = pos
                 
-        controller = self.robot.get_articulation_controller()
         action = ArticulationAction(joint_positions=target_pos)
-        controller.apply_action(action)
+        self.robot.apply_action(action)
 
         if self.verbose:
-            log(f"[Aloha] Updated joint target positions with command: {joint_positions}")
+            log(f"[Aloha] Current joint positions: {current_joint_pos}")
+            log(f"[Aloha] Received joint position commands: {joint_positions}")
+            log(f"[Aloha] Target joint positions: {target_pos}")
 
+    #TODO: fix me!!
     def _set_base_velocity(self, vx, vy, vtheta):
         # Set root velocity
         # chassis frame: x forward, y left
-        self.robot.set_linear_velocity(np.array([vx, vy, 0]))
-        self.robot.set_angular_velocity(np.array([0, 0, vtheta]))
+        #self.robot.set_linear_velocity(np.array([vx, vy, 0]))
+        #self.robot.set_angular_velocity(np.array([0, 0, vtheta]))
         if self.verbose:
             log(f"[Aloha] Updated base velocity to vx: {vx}, vy: {vy}, vtheta: {vtheta}")
 
@@ -206,7 +193,7 @@ class AlohaSim:
                 elif k == "theta.vel":
                     vTheta = v
             elif k == "lift_axis.height_mm":
-                joint_cmds["lift_axis"] = v
+                joint_cmds["lift_axis"] = v / 1000.0  # mm -> m
 
         if self.verbose:
             log(f"[Aloha] Parsed action - vX: {vX}, vY: {vY}, vTheta: {vTheta}, joint_cmds: {joint_cmds}")
@@ -221,17 +208,17 @@ class AlohaSim:
         joint_pos = self.robot.get_joint_positions()
         
         for i, name in enumerate(self.dof_names):
-            obs[f"{name}.pos"] = float(joint_pos[i])
+            if i == self.dof_indices.get("lift_axis", -1):
+                # Convert lift height to mm for observation
+                obs[f"{name}.pos"] = float(joint_pos[i] * 1000.0)  # m -> mm
+            else:
+                obs[f"{name}.pos"] = float(joint_pos[i])
             
         # Base (Ground Truth for now)
         pose = self.robot.get_world_pose()
         obs["x_pos"] = float(pose[0][0])
         obs["y_pos"] = float(pose[0][1])
         # Theta from quaternion ...
-
-        if self.verbose:
-            log(f"[Aloha] Current pose: x={obs['x_pos']:.2f}, y={obs['y_pos']:.2f}, theta={obs.get('theta', 0):.2f}")
-            log(f"[Aloha] Current joint positions: " + ", ".join([f"{name}={obs[f'{name}.pos']:.2f}" for name in self.dof_names]))
         
         # Cameras
         for name, cam in self.cameras.items():
@@ -263,8 +250,12 @@ def main():
         log("[HOST] Running in no-sim mode. Will idle until interrupted, without starting simulation or ZMQ sockets.")
         try:
             while simulation_app.is_running():
+                start_time = time.perf_counter()
                 simulation_app.update()
-                time.sleep(0.1)
+                
+                elapsed = time.perf_counter() - start_time
+                sleep_time = max(0, (1.0 / FPS) - elapsed)
+                time.sleep(sleep_time)
         except KeyboardInterrupt:
             log("[HOST] Keyboard interrupt received. Exiting...")
             simulation_app.close()
@@ -280,8 +271,7 @@ def main():
     socket_sub.setsockopt(zmq.CONFLATE, 1)
     socket_sub.bind(f"tcp://0.0.0.0:{PORT_CMD}")
 
-    sim = IsaacWorld("./model/Aloha/urdf/Aloha - Copy.urdf", args.verbose)
-    #sim = IsaacWorld("./model/am/aloha_mini.urdf", args.verbose)
+    sim = IsaacWorld("./assets/alohamini_default_scene.usd", "/Aloha", verbose=args.verbose)
     log(f"[HOST] Simulator running on ports: OBS={PORT_OBS}, CMD={PORT_CMD}")
 
     try:
@@ -328,8 +318,6 @@ def main():
                         
             # 4. Publish
             socket_pub.send_string(json.dumps(encoded_obs))
-            if args.verbose:
-                log(f"[HOST] Published observation with keys: {list(encoded_obs.keys())}")
 
             # 5. Sleep
             elapsed = time.perf_counter() - start_time
