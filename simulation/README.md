@@ -19,11 +19,11 @@ As of **2/16**, sim is a WIP and this is very much incomplete. Remote simulation
 
 2. In the Docker container, you have a few basic options:
     
-    - **Standalone teleop:** launch with `python teleoperate.py --no_leader` for control with keyboard
-    - **Record a dataset:** launch 
-    - **Replay a dataset:** launch
-    - **Train a policy:**
-    - **Evaluate a policy**:
+    - **Standalone teleop:** launch with `python keyboard_teleop.py --hide_state` for control with keyboard
+    - **Record a dataset:** NOT TESTED
+    - **Replay a dataset:** NOT TESTED
+    - **Train a policy:** NOT TESTED
+    - **Evaluate a policy**: NOT TESTED
 
     Feel free to look these up if you're unfamiliar with what this all is. Helpful references are provided [here](#references).
 
@@ -54,4 +54,4 @@ As of **2/16**, sim is a WIP and this is very much incomplete. Remote simulation
 
 ## References
 
-wip, I lied!
+WIP
