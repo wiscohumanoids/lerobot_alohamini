@@ -430,3 +430,131 @@ class KeyboardRoverTeleop(KeyboardTeleop):
             "linear.vel": linear_velocity,
             "angular.vel": angular_velocity,
         }
+
+
+
+class AlohaminiSimTeleop(KeyboardTeleop):
+    """
+    Teleop class to use keyboard inputs for controlling the Aloha Mini in simulation.
+    """
+
+    config_class = KeyboardTeleopConfig
+    name = "alohamini_sim_keyboard"
+
+
+    JOINT_NAMES = [
+        "arm_left_shoulder_pan.pos", "arm_left_shoulder_lift.pos", "arm_left_elbow_flex.pos",
+        "arm_left_wrist_flex.pos", "arm_left_wrist_roll.pos", "arm_left_gripper.pos",
+        "arm_right_shoulder_pan.pos", "arm_right_shoulder_lift.pos", "arm_right_elbow_flex.pos",
+        "arm_right_wrist_flex.pos", "arm_right_wrist_roll.pos", "arm_right_gripper.pos",
+    ]
+
+    JOINT_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=']
+    JOINT_REVERSE_KEYS = ['!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+']
+
+    MOVE_BINDINGS = {
+        'w': ('x.vel', 0.05),
+        's': ('x.vel', -0.05),
+        'a': ('y.vel', 0.05),
+        'd': ('y.vel', -0.05),
+        'q': ('theta.vel', 10.0),
+        'e': ('theta.vel', -10.0),
+    }
+
+    LIFT_BINDINGS = {
+        'u': ('lift_axis.height_mm', 2.0),
+        'j': ('lift_axis.height_mm', -2.0),
+    }
+
+    @property
+    def action_features(self) -> dict:
+        return {
+            "dtype": "float32",
+            "shape": (18,),
+            "names": {
+                "x.vel": 0,
+                "y.vel": 1,
+                "theta.vel": 2,
+                "lift_axis.height_mm": 3,
+                "arm_left_shoulder_pan.pos": 4,
+                "arm_left_shoulder_lift.pos": 5,
+                "arm_left_elbow_flex.pos": 6,
+                "arm_left_wrist_flex.pos": 7,
+                "arm_left_wrist_roll.pos": 8,
+                "arm_left_gripper.pos": 9,
+                "arm_right_shoulder_pan.pos": 10,
+                "arm_right_shoulder_lift.pos": 11,
+                "arm_right_elbow_flex.pos": 12,
+                "arm_right_wrist_flex.pos": 13,
+                "arm_right_wrist_roll.pos": 14,
+                "arm_right_gripper.pos": 15,
+            },
+        }
+    
+
+    def get_default_state(self):
+        state = {
+            "x.vel": 0.0,
+            "y.vel": 0.0,
+            "theta.vel": 0.0,
+            "lift_axis.height_mm": 300.0
+        }
+        for name in self.JOINT_NAMES:
+            state[name] = 0.0
+        return state
+
+
+    def __init__(self, config: KeyboardTeleopConfig): #ignore config for now
+        super().__init__(config)
+        self.target_state = self.get_default_state()
+
+    @property
+    def is_calibrated(self) -> bool:
+        """NO NEED FOR CALIBRATION"""
+        return True
+
+    @check_if_not_connected
+    def get_action(self) -> RobotAction:
+        """
+        Get the current action based on pressed keys.
+
+        Returns:
+            RobotAction with 'linear.vel' and 'angular.vel' keys
+        """
+
+        # Check which keys are currently pressed (not released)
+        active_keys = {key for key, is_pressed in self.current_pressed.items() if is_pressed}
+        for key in active_keys:
+            # RESET Logic
+            if key == ' ':
+                self.target_state = self.get_default_state()
+                #print("RESET TO DEFAULTS")
+
+            elif key == 'k':
+                self.target_state["x.vel"] = 0.0
+                self.target_state["y.vel"] = 0.0
+                self.target_state["theta.vel"] = 0.0
+                #print("VELOCITY STOP")
+
+            elif key in self.MOVE_BINDINGS:
+                attr, val = self.MOVE_BINDINGS[key]
+                self.target_state[attr] += val
+            
+            elif key in self.LIFT_BINDINGS:
+                attr, val = self.LIFT_BINDINGS[key]
+                self.target_state[attr] += val
+
+            elif key in self.JOINT_KEYS:
+                idx = self.JOINT_KEYS.index(key)
+                self.target_state[self.JOINT_NAMES[idx]] += self.joint_increment
+                #print(f"Joint {self.JOINT_NAMES[idx]}: {self.target_state[self.JOINT_NAMES[idx]]:.3f}")
+
+            elif key in self.JOINT_REVERSE_KEYS:
+                idx = self.JOINT_REVERSE_KEYS.index(key)
+                self.target_state[self.JOINT_NAMES[idx]] -= self.joint_increment
+                #print(f"Joint {self.JOINT_NAMES[idx]}: {self.target_state[self.JOINT_NAMES[idx]]:.3f}")
+
+               # self.target_state["x.vel"] = limit(self.target_state["x.vel"], -0.5, 0.5)
+                #self.target_state["y.vel"] = limit(self.target_state["y.vel"], -0.5, 0.5)
+
+        return self.target_state

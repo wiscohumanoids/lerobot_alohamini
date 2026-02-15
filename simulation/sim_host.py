@@ -11,10 +11,10 @@ import numpy as np
 from isaacsim import SimulationApp
 
 def log(msg: str):
-    print(f"\033[1;36m {msg}\033[0m")
+    print(f"\033[1;36m{msg}\033[0m")
 
 def error(msg: str):
-    print(f"\033[1;31m [ERROR] {msg}\033[0m")
+    print(f"\033[1;31m[ERROR] {msg}\033[0m")
 
 log("[ENV] AlohaMini sim startup")
 
@@ -81,8 +81,11 @@ class AlohaSim:
         self.robot = Articulation(prim_path=self.prim_path, name="Aloha")
                
         # Add cameras
-        self._add_camera("head_front", "/Aloha/base_link/front_cam", np.array([0.2, 0, 0.2]), np.array([0, 0, 0]))
-        self._add_camera("head_top", "/Aloha/base_link/top_cam", np.array([0, 0, 0.5]), np.array([0, 90, 0]))
+        self._add_camera("camera_front", "/Aloha/base_link/camera_front")   # figure out actual placements & base orientations
+        self._add_camera("camera_top", "/Aloha/base_link/camera_top")
+        self._add_camera("camera_back", "/Aloha/base_link/camera_back")
+        self._add_camera("camera_left", "/Aloha/left_Wrist_Pitch_Roll/camera_left")
+        self._add_camera("camera_right", "/Aloha/right_Wrist_Pitch_Roll/camera_right")
 
         world.scene.add(self.robot)
         world.reset()
@@ -94,77 +97,128 @@ class AlohaSim:
 
         # Add dof names mapping
         self.dof_names = self.robot.dof_names   # Note: these names should be different, but the order in which they're listed remains consistent and should be good for now -- TODO: address me in the future
-        self.dof_indices = {name: i for i, name in enumerate(self.dof_names)}
+        
+        self.dof_indices = {}
+        for _, name in enumerate(self.dof_names):
+            self.dof_indices[name] = self.robot.get_dof_index(name) # just to be extra sure about the order here
 
         log("[Aloha] DoF/joint map: " + str(self.dof_indices))
 
+        self.wheel_indices = []
+        try:
+            self.wheel_indices = [self.dof_indices["wheel1_joint"], self.dof_indices["wheel2_joint"], self.dof_indices["wheel3_joint"]]
+        except Exception as e:
+            error(f"[Aloha] Error identifying wheel joint indices: {e}")
+        self.virtual_base_indices = [self.dof_indices["root_x_axis_joint"], self.dof_indices["root_y_axis_joint"], self.dof_indices["root_z_rotation_joint"]]
+        self.joint_indices = [idx for idx in range(len(self.dof_names)) if idx not in self.virtual_base_indices and idx not in self.wheel_indices]
 
-    def _add_camera(self, name, prim_path, translation, rotation_euler_deg):
+        log("[Aloha] Joint indices indices: " + str(self.joint_indices))
+        log("[Aloha] Virtual base indices: " + str(self.virtual_base_indices))
+        log("[Aloha] Wheel joint indices: " + str(self.wheel_indices))
+
+
+    def _add_camera(self, name, prim_path):
+
         # Apply domain randomization to camera position
         # Small random perturbation to translation (+- 2cm) and rotation (+- 2 deg)
         # This helps the model become robust to slight calibration errors in the real world
-        translation += np.random.uniform(-0.02, 0.02, size=3)
-        rotation_euler_deg = rotation_euler_deg.astype(np.float64) + np.random.uniform(-2, 2, size=3)
+        #translation += np.random.uniform(-0.02, 0.02, size=3)
+        #rotation_euler_deg = rotation_euler_deg.astype(np.float64) + np.random.uniform(-2, 2, size=3)
         
         # rotation in sim is usually quaternion
         # rotation_euler_deg: [x, y, z]
-        rot_quat = euler_angles_to_quat(np.radians(rotation_euler_deg))
+        #rot_quat = euler_angles_to_quat(np.radians(rotation_euler_deg))
         
         camera = Camera(
             prim_path=prim_path,
-            position=translation,
+            #position=translation,
             frequency=FPS,
             resolution=CAM_RESOLUTION,
-            orientation=rot_quat
+            #orientation=rot_quat
         )
         camera.initialize()
         self.cameras[name] = camera
 
-        log(f"[Aloha] Adding camera '{name}' at {prim_path} with translation {translation} and rotation (deg) {rotation_euler_deg}")
+        #log(f"[Aloha] Adding camera '{name}' at {prim_path} with translation {translation} and rotation (deg) {rotation_euler_deg}")
+        log(f"[Aloha] Adding camera '{name}' at {prim_path}")
+
+    def _calc_wheel_vels(self, vX, vY, vTheta):
+        return {
+            "root_x_axis_joint": vX,
+            "root_y_axis_joint": vY,
+            "root_z_rotation_joint": vTheta
+        }
+
+        WHEEL_RADIUS = 0.05  # meters
+        BASE_RADIUS = 0.125  # meters
+
+        theta_rad = vTheta * (np.pi / 180.0)
+        velocity_vector = np.array([vX, vY, theta_rad])
+
+        # Define the wheel mounting angles with a -90° offset.
+        angles = np.radians(np.array([240, 0, 120]))
+        # Build the kinematic matrix: each row maps body velocities to a wheel’s linear speed.
+        # The third column (base_radius) accounts for the effect of rotation.
+        #m = np.array([[np.cos(a), np.sin(a), BASE_RADIUS] for a in angles])
+
+        # For each wheel, the rolling direction is perpendicular to the radial vector
+        # Wheel speed = -sin(alpha)*Vx + cos(alpha)*Vy + R*vTheta
+        m = np.array([[-np.sin(a), np.cos(a), BASE_RADIUS] for a in angles])
 
 
+        # Compute each wheel’s linear speed (m/s) and then its angular speed (rad/s).
+        wheel_linear_speeds = m.dot(velocity_vector)
+        wheel_angular_speeds = wheel_linear_speeds / WHEEL_RADIUS
+
+        return {
+            "base_left_wheel": wheel_angular_speeds[0],
+            "base_back_wheel": wheel_angular_speeds[1],
+            "base_right_wheel": wheel_angular_speeds[2],
+        }
 
 
-    def _set_joint_positions(self, joint_positions: dict):
+    def _set_articulation(self, joint_positions: dict, vX, vY, vTheta):
         if not joint_positions:
             if self.verbose:
-                log("[Aloha] No joint positions provided in command, skipping joint update.")
+                log("[Aloha] No joint positions provided in command, skipping update.")
             return
         
-        # joint_positions: dict of joint_name -> position
-        # We need to map this to the robot's dof indices or names
-        # For simplicity, we can use the high level Articulation API if names match
-        
-        # Note: self.robot.set_joint_positions takes numpy array and indices is optional
-        # We need to find indices for names
-        
-        current_joint_pos = self.robot.get_joint_positions()
-            
-        # Construct target array
-        # Start with current to keep uncommanded joints steady
-        target_pos = current_joint_pos.copy()
-        
+        # Refer to: https://docs.isaacsim.omniverse.nvidia.com/latest/py/source/extensions/isaacsim.core.prims/docs/index.html#isaacsim.core.prims.SingleArticulation.get_joint_velocities
+
+        # inefficient, but should be fine 
+        current_pos = self.robot.get_joint_positions()
+        current_vel = self.robot.get_joint_velocities()
+
+        target_pos = current_pos.copy()
+        target_vel = current_vel.copy()
+
+        #target_pos[self.wheel_indices] = None  # ignore position control for base joints
+        target_pos[self.virtual_base_indices] = None  # ignore position control for base joints
+        target_vel[self.joint_indices] = None  # ignore velocity control for arm joints
+
         for name, pos in joint_positions.items():
             if name in self.dof_indices:
                 idx = self.dof_indices[name]
                 target_pos[idx] = pos
+
+        wheel_cmds = self._calc_wheel_vels(vX, vY, vTheta)
+        for name, vel in wheel_cmds.items():
+            if name in self.dof_indices:
+                idx = self.dof_indices[name]
+                target_vel[idx] = vel
                 
-        action = ArticulationAction(joint_positions=target_pos)
+        action = ArticulationAction(joint_positions=target_pos, joint_velocities=target_vel)
         self.robot.apply_action(action)
 
         if self.verbose:
-            log(f"[Aloha] Current joint positions: {current_joint_pos}")
-            log(f"[Aloha] Received joint position commands: {joint_positions}")
-            log(f"[Aloha] Target joint positions: {target_pos}")
+            log(f"[Aloha] Current joint positions: {current_pos}")
+            log(f"[Aloha] Current joint velocities: {current_vel}")
 
-    #TODO: fix me!!
-    def _set_base_velocity(self, vx, vy, vtheta):
-        # Set root velocity
-        # chassis frame: x forward, y left
-        #self.robot.set_linear_velocity(np.array([vx, vy, 0]))
-        #self.robot.set_angular_velocity(np.array([0, 0, vtheta]))
-        if self.verbose:
-            log(f"[Aloha] Updated base velocity to vx: {vx}, vy: {vy}, vtheta: {vtheta}")
+            log(f"[Aloha] Received joint position commands: {joint_positions}")
+            log(f"[Aloha] Received velocity commands: vX={vX}, vY={vY}, vTheta={vTheta}")
+
+            log(f"[Aloha] Target joint positions: {target_pos}")
+            log(f"[Aloha] Target joint velocities: {target_vel}")
 
 
     def send_action(self, action: dict) -> dict:
@@ -176,14 +230,13 @@ class AlohaSim:
 
         for k, v in action.items():
             if k == "reset" and v is True:
-                # Reset -- might be an informal addon
                 log("[HOST] Resetting Aloha environment...")
                 self.robot.reset()
                 joint_cmds = {name: 0.0 for name in self.dof_names}
                 self._set_joint_positions(joint_cmds)
                 continue
             if k.endswith(".pos"):
-                joint_name = k.replace(".pos", "")
+                joint_name = k.replace(".pos", "").removeprefix("arm_")
                 joint_cmds[joint_name] = v
             elif k in ["x.vel", "y.vel", "theta.vel"]:
                 if k == "x.vel":
@@ -193,13 +246,12 @@ class AlohaSim:
                 elif k == "theta.vel":
                     vTheta = v
             elif k == "lift_axis.height_mm":
-                joint_cmds["lift_axis"] = v / 1000.0  # mm -> m
+                joint_cmds["vertical_move"] = (v / 1000.0) - 0.522  # mm -> m, with offset
 
         if self.verbose:
             log(f"[Aloha] Parsed action - vX: {vX}, vY: {vY}, vTheta: {vTheta}, joint_cmds: {joint_cmds}")
 
-        self._set_base_velocity(vX, vY, vTheta)
-        self._set_joint_positions(joint_cmds)
+        self._set_articulation(joint_cmds, vX, vY, vTheta)
 
     def get_observation(self) -> dict:
         obs = {}
@@ -271,7 +323,7 @@ def main():
     socket_sub.setsockopt(zmq.CONFLATE, 1)
     socket_sub.bind(f"tcp://0.0.0.0:{PORT_CMD}")
 
-    sim = IsaacWorld("./assets/alohamini_default_scene.usd", "/Aloha", verbose=args.verbose)
+    sim = IsaacWorld("./assets/alohamini.usd", "/Aloha", verbose=args.verbose)
     log(f"[HOST] Simulator running on ports: OBS={PORT_OBS}, CMD={PORT_CMD}")
 
     try:

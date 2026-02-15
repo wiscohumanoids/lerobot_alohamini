@@ -7,7 +7,7 @@ from lerobot.processor import make_default_processors
 from lerobot.robots.alohamini.config_lekiwi import LeKiwiClientConfig
 from lerobot.robots.alohamini.lekiwi_client import LeKiwiClient
 from lerobot.scripts.lerobot_record import record_loop
-from lerobot.teleoperators.keyboard import KeyboardTeleop, KeyboardTeleopConfig
+from lerobot.teleoperators.keyboard import KeyboardTeleop, AlohaminiSimTeleop, KeyboardTeleopConfig
 from lerobot.teleoperators.bi_so_leader import BiSOLeader, BiSOLeaderConfig
 from lerobot.teleoperators.so_leader import SOLeaderConfig
 from lerobot.utils.constants import ACTION, OBS_STR
@@ -21,7 +21,7 @@ from pathlib import Path
 
 
 ROBOT_ID = "lekiwi_sim"
-
+#6dof
 
 def main():
     parser = argparse.ArgumentParser(description="Record episodes with bi-arm teleoperation")
@@ -34,14 +34,6 @@ def main():
     parser.add_argument("--task_description", type=str, default="My task description4", help="Task description")
     parser.add_argument("--remote_ip", type=str, default="127.0.0.1", help="Robot host IP")
     parser.add_argument("--use_keyboard", action="store_true", help="Use keyboard teleoperation in place of leader arm")
-    parser.add_argument("--leader_id", type=str, default="so101_leader_bi", help="Leader arm device ID")
-    parser.add_argument(
-        "--leader_profile",
-        type=str,
-        default="so-arm-5dof",
-        choices=["so-arm-5dof", "am-arm-6dof"],
-        help="Leader arm profile selector.",
-    )
     parser.add_argument("--resume", action="store_true", help="Resume recording on existing dataset")
 
     args = parser.parse_args()
@@ -63,7 +55,7 @@ def main():
     keyboard_config = KeyboardTeleopConfig()
 
     robot = LeKiwiClient(robot_config)
-    keyboard = KeyboardTeleop(keyboard_config)
+    keyboard = AlohaminiSimTeleop(keyboard_config)
     if not args.use_keyboard:
         leader_arm = BiSOLeader(leader_arm_config) 
 
