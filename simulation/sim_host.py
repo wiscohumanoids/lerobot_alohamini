@@ -56,15 +56,19 @@ from pxr import Gf, UsdGeom  # noqa: F401
 
 
 class IsaacWorld:
-    def __init__(self, usd_path: str, prim_path: str, verbose=False):
+    def __init__(self, usd_path: str, aloha_prim_path: str, verbose=False):
         log("[World] Creating IsaacSim world...")
         self.isaacWorld = World(stage_units_in_meters=1.0)
-        self.isaacWorld.scene.add_default_ground_plane()
+        self.isaacWorld.scene.add_default_ground_plane()    #  NECESSARY (!!) DESPITE APPARENT REDUNDANCY
 
-        add_reference_to_stage(usd_path=usd_path, prim_path=prim_path)
-        log(f"[World] Loaded USD asset from {usd_path} at prim path {prim_path}")
+        add_reference_to_stage(usd_path=usd_path, prim_path=aloha_prim_path)
+        log(f"[World] Loaded USD asset from {usd_path} at prim path {aloha_prim_path}")
 
-        self.aloha = AlohaSim(self.isaacWorld, prim_path, verbose=verbose)
+        self.aloha = AlohaSim(self.isaacWorld, aloha_prim_path, verbose=verbose)
+
+        #for prim_path in other_prim_paths:
+        #    add_reference_to_stage(usd_path=usd_path, prim_path=prim_path)
+        #    log(f"[World] Loaded additional USD asset from {usd_path} at prim path {prim_path}")
 
 
 
@@ -295,10 +299,12 @@ def main():
     # Command-line args
     parser = argparse.ArgumentParser()
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
-    parser.add_argument("--no_sim", action="store_true", help="Run without loading or starting the simulation (for testing)")
+    parser.add_argument("--editor_only", action="store_true", help="Run without loading or starting the simulation (for testing)")
+    parser.add_argument("--usd_name", type=str, default="alohamini.usd", help="Name of the USD file to load from assets/")
+    
     args = parser.parse_args()
 
-    if args.no_sim:
+    if args.editor_only:
         log("[HOST] Running in no-sim mode. Will idle until interrupted, without starting simulation or ZMQ sockets.")
         try:
             while simulation_app.is_running():
@@ -323,15 +329,22 @@ def main():
     socket_sub.setsockopt(zmq.CONFLATE, 1)
     socket_sub.bind(f"tcp://0.0.0.0:{PORT_CMD}")
 
-    sim = IsaacWorld("./assets/alohamini.usd", "/Aloha", verbose=args.verbose)
+    log(f"[HOST] Loading simulation with USD asset '{args.usd_name}'...")
+    sim = IsaacWorld(f"./assets/{args.usd_name}", "/Aloha", verbose=args.verbose)
     log(f"[HOST] Simulator running on ports: OBS={PORT_OBS}, CMD={PORT_CMD}")
 
     try:
         while simulation_app.is_running():
             sim.isaacWorld.step(render=True)
             if not sim.isaacWorld.is_playing():
-                if args.verbose:
-                    log("[HOST] Simulation paused, skipping step.")
+                log("[HOST] Simulation is paused. Stepping until resumed...")
+                while not sim.isaacWorld.is_playing():
+                    sim.isaacWorld.step(render=True)
+                    elapsed = time.perf_counter() - start_time
+                    sleep_time = max(0, (1.0 / FPS) - elapsed)
+                    time.sleep(sleep_time)
+
+                log("[HOST] Simulation resumed.")
                 continue
 
             start_time = time.perf_counter()

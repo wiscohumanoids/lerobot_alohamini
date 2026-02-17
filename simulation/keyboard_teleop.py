@@ -1,3 +1,4 @@
+import math
 from ast import arg
 import sys
 import select
@@ -112,6 +113,7 @@ def main():
 
     args = parser.parse_args()
 
+
     log(f"[KEYBOARD TELEOP] Starting @ command port {CMD_PORT} w/ host IP {IP}")
     context = zmq.Context()
     cmd_socket = context.socket(zmq.PUSH)
@@ -120,6 +122,11 @@ def main():
 
     target_state = get_default_state()
     joint_increment = 0.05
+
+    if args.dance:
+        log("[KEYBOARD TELEOP] Performing dance routine...")
+        dance(cmd_socket)
+        log("[KEYBOARD TELEOP] Dance routine complete. Entering teleop mode.")
 
     try:
         print(MSG + "\n")
@@ -177,7 +184,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
