@@ -1,24 +1,59 @@
 import logging
 import argparse
 import inspect
+import json
 import os
 import time
+import zmq
+import sys
+from enum import Enum
 
-from lerobot.robots.alohamini import LeKiwiClient, LeKiwiClientConfig
-from lerobot.teleoperators.keyboard.teleop_keyboard import KeyboardTeleop, KeyboardTeleopConfig
+from lerobot.teleoperators.keyboard.teleop_keyboard import KeyboardSimTeleop, KeyboardSimTeleopConfig
 from lerobot.teleoperators.bi_so_leader import BiSOLeader, BiSOLeaderConfig
 from lerobot.teleoperators.so_leader import SOLeaderConfig
 from lerobot.utils.robot_utils import precise_sleep
-from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
 
-# ============ Parameter Section ============ #
+from lerobot.teleoperators.phone.config_phone import PhoneConfig, PhoneOS
+from lerobot.teleoperators.phone.phone_processor import MapPhoneActionToRobotAction
+from lerobot.teleoperators.phone.teleop_phone import Phone
+
+from lerobot.model.kinematics import RobotKinematics
+from lerobot.processor import RobotAction, RobotObservation, RobotProcessorPipeline
+from lerobot.robots.so_follower.robot_kinematic_processor import (
+    EEBoundsAndSafety,
+    EEReferenceAndDelta,
+    GripperVelocityToJoint,
+    InverseKinematicsEEToJoints,
+)
+from lerobot.processor.converters import (
+    robot_action_observation_to_transition,
+    transition_to_robot_action,
+)
+
+
+class TeleopType(Enum):
+    LEADER = 1
+    KEYBOARD = 2
+    PHONE = 3
+
+
+def log(msg: str):
+    print(f"\033[1;36m{msg}\033[0m")
+
+def error(msg: str):
+    print(f"\033[1;31m[ERROR] {msg}\033[0m")
+
+log("Teleop starting...")
+
 parser = argparse.ArgumentParser()
-parser.add_argument("--no_robot", action="store_true", help="Do not connect robot, only print actions")
-parser.add_argument("--no_leader", action="store_true", help="Do not connect leader arm, only perform keyboard-controlled actions.")
+parser.add_argument(
+    "--type",
+    type=str,
+    choices=[member.name.lower() for member in TeleopType],
+    help="Type of teleop to use"
+)
 parser.add_argument("--fps", type=int, default=30, help="Main loop frequency (frames per second)")
-parser.add_argument("--remote_ip", type=str, default="host.docker.internal", help="LeKiwi host IP address")
 parser.add_argument("--leader_id", type=str, default="so101_leader_bi", help="Leader arm device ID")
-parser.add_argument("--debug_no_rerun", action="store_true", help="Disable rerun logging for debugging purposes")
 parser.add_argument(
     "--leader_profile",
     type=str,
@@ -26,79 +61,117 @@ parser.add_argument(
     choices=["so-arm-5dof", "am-arm-6dof"],
     help="Leader arm profile selector.",
 )
+parser.add_argument("--show_state", action="store_true", help="Continually show target state for debug")
 
 args = parser.parse_args()
+if args.type is None or TeleopType[args.type.upper()] is None:
+    error("Must include a VALID teleop type with --type!")
 
-NO_ROBOT = args.no_robot
-NO_LEADER = args.no_leader
+
+TELEOP_TYPE = TeleopType[args.type.upper()]
+CMD_PORT = 5555
 FPS = args.fps
-# ========================================== #
+IP = "host.docker.internal"
 
-if NO_ROBOT:
-    print("🧪 NO_ROBOT mode enabled: robot will not connect, only print actions.")
 
-if NO_LEADER:
-    print("🧪 NO_LEADER mode enabled: leader arm will not connect, only print actions.")
-# Create configs
-robot_config = LeKiwiClientConfig(remote_ip=args.remote_ip, id="my_alohamini")
-bi_cfg = BiSOLeaderConfig(
-    left_arm_config=SOLeaderConfig(
-        port="/dev/am_arm_leader_left",
-        arm_profile=args.leader_profile,
-    ),
-    right_arm_config=SOLeaderConfig(
-        port="/dev/am_arm_leader_right",
-        arm_profile=args.leader_profile,
-    ),
-    id=args.leader_id,
-)
-leader = BiSOLeader(bi_cfg)
-keyboard_config = KeyboardTeleopConfig(id="my_laptop_keyboard")
-keyboard = KeyboardTeleop(keyboard_config)
-robot = LeKiwiClient(robot_config)
+match TELEOP_TYPE:
+    case TeleopType.LEADER:
+        bi_cfg = BiSOLeaderConfig(
+            left_arm_config=SOLeaderConfig(
+                port="/dev/am_arm_leader_left",
+                arm_profile=args.leader_profile,
+            ),
+            right_arm_config=SOLeaderConfig(
+                port="/dev/am_arm_leader_right",
+                arm_profile=args.leader_profile,
+            ),
+            id=args.leader_id,
+        )
+        teleop = BiSOLeader(bi_cfg)
+    case TeleopType.KEYBOARD:
+        keyboard_config = KeyboardSimTeleopConfig(id="keyboard")
+        teleop = KeyboardSimTeleop(keyboard_config)     # CURRENTLY BROKEN -- FIX LATER!!
+    case TeleopType.PHONE:
+        phone_config = PhoneConfig(phone_os=PhoneOS.ANDROID)
+        teleop = Phone(phone_config)
 
-# Connection logic
-if not NO_ROBOT:
-    robot.connect()
-else:
-    print("🧪 robot.connect() skipped, only printing actions.")
+        ARM_JOINT_NAMES = {
+            "shoulder_pan",
+            "shoulder_lift",
+            "elbow_flex",
+            "wrist_flex",
+            "wrist_yaw",
+            "wrist_roll",
+            "gripper"
+        }
 
-if not NO_LEADER:
-    leader.connect()
-else:
-    print("🧪 robot.connect() skipped, only printing actions.")
+        kinematics_solver = RobotKinematics(
+            urdf_path="./assets/SO101/so101_new_calib.urdf",
+            target_frame_name="gripper_frame_link",
+            joint_names=ARM_JOINT_NAMES
+        )
 
-keyboard.connect()
-if not keyboard.is_connected:
-    logging.warning("Keyboard is not connected! Still running for debug.")
+        phone_to_robot_joints_processor = RobotProcessorPipeline[
+            tuple[RobotAction, RobotObservation], RobotAction
+        ](
+            steps=[
+                MapPhoneActionToRobotAction(platform=phone_config.phone_os),
+                EEReferenceAndDelta(
+                    kinematics=kinematics_solver,
+                    end_effector_step_sizes={"x": 0.5, "y": 0.5, "z": 0.5},
+                    motor_names=ARM_JOINT_NAMES,
+                    use_latched_reference=True,
+                ),
+                EEBoundsAndSafety(
+                    end_effector_bounds={"min": [-1.0, -1.0, -1.0], "max": [1.0, 1.0, 1.0]},
+                    max_ee_step_m=0.10,
+                ),
+                GripperVelocityToJoint(
+                    speed_factor=20.0,
+                ),
+                InverseKinematicsEEToJoints(
+                    kinematics=kinematics_solver,
+                    motor_names=ARM_JOINT_NAMES,
+                    initial_guess_current_joints=True,
+                ),
+            ],
+            to_transition=robot_action_observation_to_transition,
+            to_output=transition_to_robot_action,
+        )
 
-if not args.debug_no_rerun:
-    init_rerun(session_name="lekiwi_teleop")
 
-if not robot.is_connected and not NO_ROBOT:
-    logging.warning("Robot is not connected! Still running for debug.")
-if not leader.is_connected and not NO_LEADER:
-    logging.warning("Leader is not connected! Still running for debug.")
+        pass
+
+
+log(f"[SIM TELEOP] Connecting @ command port {CMD_PORT} w/ host IP {IP}")
+context = zmq.Context()
+cmd_socket = context.socket(zmq.PUSH)
+cmd_socket.setsockopt(zmq.CONFLATE, 1)
+cmd_socket.connect(f"tcp://{IP}:{CMD_PORT}")
+
+
+teleop.connect()
+if not teleop.is_connected:
+    error("Teleop not able to connect!")
+    sys.exit(-1)
 
 # Main loop
-while True:
-    t0 = time.perf_counter()
+try:
+    while True:
+        t0 = time.perf_counter()
 
-    observation = robot.get_observation() if not NO_ROBOT else {}
-    arm_actions = leader.get_action() if not NO_LEADER else {}
-    arm_actions = {f"arm_{k}": v for k, v in arm_actions.items()}
-    keyboard_keys = keyboard.get_action()
-    base_action = robot._from_keyboard_to_base_action(keyboard_keys)
-    lift_action = robot._from_keyboard_to_lift_action(keyboard_keys)
+        if TELEOP_TYPE is TeleopType.PHONE:
+            target_state = phone_to_robot_joints_processor((teleop.get_action(), None))
+        else:
+            target_state = teleop.get_action()
+        cmd_socket.send_string(json.dumps(target_state))
 
-    action = {**arm_actions, **base_action, **lift_action}
-    if not args.debug_no_rerun:
-        log_rerun_data(observation, action)
-
-    if NO_ROBOT:
-        print(f"[NO_ROBOT] action → {action}", end="\r")
-    else:
-        robot.send_action(action)
-        print(f"Sent action → {action}", end="\r")
-
-    precise_sleep(max(1.0 / FPS - (time.perf_counter() - t0), 0.0))
+        if args.show_state:
+            print(f"\rSent: {target_state}                       ", end="", flush=True)
+        precise_sleep(max(1.0 / FPS - (time.perf_counter() - t0), 0.0))
+except Exception as e:
+    error(f" Unknown exception: {e}")
+finally:
+    log("Quitting teleop...")
+    cmd_socket.close()
+    context.term()

@@ -113,7 +113,10 @@ RUN pip install --no-cache-dir \
     notebook
 
 # Install Feetech servo sdk for motor control, leader arms
-RUN pip install feetech-servo-sdk
+RUN pip install feetech-servo-sdk \
+    hebi-py \
+    teleop \
+    placo
 
 # Expose ports
 # 8888: Jupyter Notebook/Lab

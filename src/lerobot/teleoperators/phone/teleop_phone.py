@@ -25,6 +25,7 @@ import time
 import hebi
 import numpy as np
 from teleop import Teleop
+import uvicorn
 
 from lerobot.teleoperators.phone.config_phone import PhoneConfig, PhoneOS
 from lerobot.teleoperators.teleoperator import Teleoperator
@@ -32,6 +33,16 @@ from lerobot.utils.decorators import check_if_already_connected, check_if_not_co
 from lerobot.utils.rotation import Rotation
 
 logger = logging.getLogger(__name__)
+
+
+def run_no_ssl(self):
+    """Run without SSL for local development or behind a reverse proxy."""
+    print(self.__dict__)
+    uvicorn.run(self._Teleop__app, host="0.0.0.0", port=8888, log_level="debug")
+
+Teleop.run = run_no_ssl
+
+
 
 
 class BasePhone:
@@ -227,7 +238,7 @@ class AndroidPhone(BasePhone, Teleoperator):
     @check_if_already_connected
     def connect(self) -> None:
         logger.info("Starting teleop stream for Android...")
-        self._teleop = Teleop()
+        self._teleop = Teleop(host="0.0.0.0", port="8888")
         self._teleop.subscribe(self._android_callback)
         self._teleop_thread = threading.Thread(target=self._teleop.run, daemon=True)
         self._teleop_thread.start()

@@ -9,6 +9,11 @@ import json
 import zmq
 import argparse
 
+from lerobot.teleoperators.phone.config_phone import PhoneConfig, PhoneOS
+from lerobot.teleoperators.phone.phone_processor import MapPhoneActionToRobotAction
+from lerobot.teleoperators.phone.teleop_phone import Phone
+
+
 CMD_PORT = 5555
 IP = "host.docker.internal"
 
@@ -110,11 +115,12 @@ def get_default_state():
 def main():
     parser = argparse.ArgumentParser(description="Standalone Keyboard Teleoperation for LeKiwi")
     parser.add_argument("--hide_state", action="store_true", help="Hide the continuously printed target state for cleaner output")
+    parser.add_argument("--use_phone", actioin="store_true", help="Use phone-based teleoperation instead of keyboard")
 
     args = parser.parse_args()
 
 
-    log(f"[KEYBOARD TELEOP] Starting @ command port {CMD_PORT} w/ host IP {IP}")
+    log(f"[SIM TELEOP] Connecting @ command port {CMD_PORT} w/ host IP {IP}")
     context = zmq.Context()
     cmd_socket = context.socket(zmq.PUSH)
     cmd_socket.setsockopt(zmq.CONFLATE, 1)
@@ -122,11 +128,6 @@ def main():
 
     target_state = get_default_state()
     joint_increment = 0.05
-
-    if args.dance:
-        log("[KEYBOARD TELEOP] Performing dance routine...")
-        dance(cmd_socket)
-        log("[KEYBOARD TELEOP] Dance routine complete. Entering teleop mode.")
 
     try:
         print(MSG + "\n")
