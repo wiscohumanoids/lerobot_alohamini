@@ -35,15 +35,6 @@ from lerobot.utils.rotation import Rotation
 logger = logging.getLogger(__name__)
 
 
-def run_no_ssl(self):
-    """Run without SSL for local development or behind a reverse proxy."""
-    print(self.__dict__)
-    uvicorn.run(self._Teleop__app, host="0.0.0.0", port=8888, log_level="debug")
-
-Teleop.run = run_no_ssl
-
-
-
 
 class BasePhone:
     _enabled: bool = False
@@ -198,7 +189,7 @@ class IOSPhone(BasePhone, Teleoperator):
         enable = bool(raw_inputs.get("b1", 0))
 
         # Rising edge then re-capture calibration immediately from current raw pose
-        if enable and not self._enabled:
+        if enable and not self._enabled and raw_position is not None:
             self._reapply_position_calibration(raw_position)
 
         # Apply calibration
@@ -238,7 +229,7 @@ class AndroidPhone(BasePhone, Teleoperator):
     @check_if_already_connected
     def connect(self) -> None:
         logger.info("Starting teleop stream for Android...")
-        self._teleop = Teleop(host="0.0.0.0", port="8888")
+        self._teleop = Teleop(host="*", port="8888")
         self._teleop.subscribe(self._android_callback)
         self._teleop_thread = threading.Thread(target=self._teleop.run, daemon=True)
         self._teleop_thread.start()

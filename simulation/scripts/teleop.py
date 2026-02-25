@@ -31,6 +31,16 @@ from lerobot.processor.converters import (
 )
 
 
+
+"""
+
+NOTE: THERE WERE RECENTLY SOME CHANGES WITH SSL CERTIFICATES AND SUCH, SO PHONE TELEOP MIGHT JUST NOT WORK AT ALL
+IN THAT CASE, I (AFTER MUCH TRIAL & ERROR) HAD TO APPLY AN INSECURE FIX AND FORCE CHROME ON MY PHONE TO RECOGNIZE CONNECTION AS SECURE
+
+"""
+
+
+
 class TeleopType(Enum):
     LEADER = 1
     KEYBOARD = 2
@@ -155,13 +165,16 @@ if not teleop.is_connected:
     error("Teleop not able to connect!")
     sys.exit(-1)
 
+log("Teleop connected!")
+
 # Main loop
 try:
     while True:
         t0 = time.perf_counter()
 
         if TELEOP_TYPE is TeleopType.PHONE:
-            target_state = phone_to_robot_joints_processor((teleop.get_action(), None))
+           print(teleop.get_action())
+           # target_state = phone_to_robot_joints_processor((teleop.get_action(), None))
         else:
             target_state = teleop.get_action()
         cmd_socket.send_string(json.dumps(target_state))

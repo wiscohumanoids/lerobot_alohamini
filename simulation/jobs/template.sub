@@ -1,0 +1,18 @@
+# HTCondor Submit File for a Docker job
+
+universe = container
+container_image = docker://alpine:latest
+
+# The executable can be a script transferred from your machine
+# or an absolute path if it is already in the container image.
+executable = /bin/echo
+arguments = "Hello, HTCondor in Docker!"
+
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+
+output = job.out
+error = job.err
+log = job.log
+
+queue

@@ -126,7 +126,7 @@ EXPOSE 8888 5555 5556
 
 # Set environment variables
 ENV PYTHONPATH=/workspace/lerobot_alohamini:$PYTHONPATH
-ENV MUJOCO_GL=egl
+#ENV MUJOCO_GL=egl
 
 # Create directories for data and logs
 RUN mkdir -p /workspace/data /workspace/logs /workspace/outputs

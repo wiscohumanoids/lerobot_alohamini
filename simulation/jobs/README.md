@@ -1,0 +1,1 @@
+Copy `template.sub` as a baseline to create & submit various HTCondor jobs.
