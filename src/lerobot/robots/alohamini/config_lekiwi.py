@@ -43,9 +43,9 @@ def lekiwi_cameras_config() -> dict[str, CameraConfig]:
 @RobotConfig.register_subclass("lekiwi")
 @dataclass
 class LeKiwiConfig(RobotConfig):
-    left_port: str = "/dev/am_arm_follower_left"  # port to connect to the bus
-    right_port: str = "/dev/am_arm_follower_right"  # port to connect to the bus
-    base_port: str = "/dev/am_base"
+    left_port: str = "/dev/ttyACM0"  # port to connect to the bus
+    right_port: str = "/dev/ttyACM1"  # port to connect to the bus
+    base_port: str = "/dev/ttyACM2"
 
     disable_torque_on_disconnect: bool = True
     arm_profile: str = "so-arm-5dof"  # "am-arm-6dof" or "so-arm-5dof"
