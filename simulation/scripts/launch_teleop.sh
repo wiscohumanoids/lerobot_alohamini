@@ -1,0 +1,1 @@
+python teleop.py --left_leader_port=/dev/ttyACM0 --right_leader_port=/dev/ttyACM1 --show_state

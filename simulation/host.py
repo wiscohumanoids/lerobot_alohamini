@@ -61,11 +61,11 @@ class IsaacWorld:
         log("[World] Creating IsaacSim world...")
         self.isaacWorld = World(stage_units_in_meters=1.0)
 
-        add_reference_to_stage(usd_path=usd_path, prim_path="/World/Scene")
+        add_reference_to_stage(usd_path=usd_path, prim_path="/World")
 
         log(f"[World] Loaded USD asset from {usd_path}")
 
-        #self.aloha = AlohaSim(self.isaacWorld, aloha_prim_path, verbose=verbose)
+        self.aloha = AlohaSim(self.isaacWorld, aloha_prim_path, verbose=verbose)
 
         #for prim_path in other_prim_paths:
         #    add_reference_to_stage(usd_path=usd_path, prim_path=prim_path)
@@ -335,13 +335,12 @@ def main():
     socket_sub.bind(f"tcp://0.0.0.0:{PORT_CMD}")
 
     log(f"[HOST] Loading simulation with USD asset '{args.usd_name}'...")
-    sim = IsaacWorld(f"./assets/{args.usd_name}", "/AlohaMini", verbose=args.verbose)
+    sim = IsaacWorld(f"./assets/{args.usd_name}", "/World/Scene/AlohaMini", verbose=args.verbose)
     log(f"[HOST] Simulator running on ports: OBS={PORT_OBS}, CMD={PORT_CMD}")
 
     try:
         while simulation_app.is_running():
             sim.isaacWorld.step(render=True)
-            time.sleep(1)
             
             if not sim.isaacWorld.is_playing():
                 log("[HOST] Simulation is paused. Stepping until resumed...")
