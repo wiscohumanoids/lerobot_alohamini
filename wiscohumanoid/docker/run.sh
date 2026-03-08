@@ -72,7 +72,8 @@ DOCKER_ARGS=(
     --runtime=nvidia \
     --privileged \
     -v /dev/bus/usb:/dev/bus/usb \
-    -v ../leader_calibration:/root/.cache/huggingface/lerobot/calibration/teleoperators/so_leader
+    -v ../leader_calibration/leader:/root/.cache/huggingface/lerobot/calibration/teleoperators/so_leader
+    -v ../leader_calibration/robot:/root/.cache/huggingface/lerobot/calibration/robots/lekiwi
     --gpus all
 )
 
