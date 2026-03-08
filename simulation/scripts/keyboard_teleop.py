@@ -1,14 +1,13 @@
-import math
-from ast import arg
 import sys
-import select
-import termios
 import tty
+import zmq
+import math
 import time
 import json
-import zmq
+import select
+import termios
 import argparse
-
+from ast import arg
 
 CMD_PORT = 5555
 IP = "host.docker.internal"

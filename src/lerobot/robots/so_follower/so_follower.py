@@ -51,9 +51,10 @@ class SOFollower(Robot):
         norm_mode_body = MotorNormMode.DEGREES if config.use_degrees else MotorNormMode.RANGE_M100_100
         if config.arm_profile == "am-arm-6dof":
             motors = {
+
                 "shoulder_pan": Motor(1, "sts3250", norm_mode_body),
                 "shoulder_lift": Motor(2, "sts3095", norm_mode_body),
-                "elbow_flex": Motor(3, "sts3250", norm_mode_body),
+                "elbow_flex": Motor(3, "sts3095", norm_mode_body),
                 "wrist_flex": Motor(4, "sts3250", norm_mode_body),
                 "wrist_yaw": Motor(5, "sts3250", norm_mode_body),
                 "wrist_roll": Motor(6, "sts3250", norm_mode_body),
@@ -78,6 +79,10 @@ class SOFollower(Robot):
             calibration=self.calibration,
         )
         self.cameras = make_cameras_from_configs(config.cameras)
+        self._last_current_print_ts = 0.0
+        self._overcurrent_count: dict[str, int] = {}
+        self._overcurrent_limit_ma = 2000.0
+        self._overcurrent_trip_n = 20
 
     @property
     def _motors_ft(self) -> dict[str, type]:
@@ -203,17 +208,58 @@ class SOFollower(Robot):
         try:
             currents = self.bus.sync_read("Present_Current")
             currents_ma = {motor: val * 6.5 for motor, val in currents.items()}
-            print(
-                "Motor current (mA): "
-                + ", ".join(f"{motor}={currents_ma[motor]:.1f}" for motor in currents_ma)
-            )
+            now = time.perf_counter()
+            if now - self._last_current_print_ts >= 0.5:
+                self._last_current_print_ts = now
+                motors = list(self.bus.motors.keys())
+                lines = ["Motor current (mA):"]
+                lines += [
+                    f"  {motor:<12} {currents_ma[motor]:7.1f}"
+                    for motor in motors
+                    if motor in currents_ma
+                ]
+                print("\n".join(lines))
+
+            tripped_motor = None
+            tripped_current = 0.0
+            for motor, current_ma in currents_ma.items():
+                if current_ma > self._overcurrent_limit_ma:
+                    self._overcurrent_count[motor] = self._overcurrent_count.get(motor, 0) + 1
+                else:
+                    self._overcurrent_count[motor] = 0
+
+                if self._overcurrent_count[motor] >= self._overcurrent_trip_n:
+                    tripped_motor = motor
+                    tripped_current = current_ma
+                    break
+
+            if tripped_motor is not None:
+                logger.error(
+                    f"Overcurrent protection triggered on '{tripped_motor}': "
+                    f"{tripped_current:.1f}mA > {self._overcurrent_limit_ma:.1f}mA "
+                    f"for {self._overcurrent_count[tripped_motor]} consecutive reads. "
+                    "Disabling torque and disconnecting."
+                )
+                try:
+                    self.bus.disable_torque(num_retry=0)
+                except Exception:
+                    pass
+                try:
+                    self.disconnect()
+                except Exception:
+                    pass
+                raise RuntimeError(
+                    f"Overcurrent protection triggered on '{tripped_motor}' ({tripped_current:.1f}mA)."
+                )
+        except RuntimeError:
+            raise
         except Exception as exc:
             logger.debug(f"{self} read current failed: {exc}")
 
         # Capture images from cameras
         for cam_key, cam in self.cameras.items():
             start = time.perf_counter()
-            obs_dict[cam_key] = cam.async_read()
+            obs_dict[cam_key] = cam.read_latest()
             dt_ms = (time.perf_counter() - start) * 1e3
             logger.debug(f"{self} read {cam_key}: {dt_ms:.1f}ms")
 

@@ -36,7 +36,7 @@ from lerobot.motors.feetech import (
 
 from ..robot import Robot
 from ..utils import ensure_safe_goal_position
-from .config_lekiwi import LeKiwiConfig, LeKiwiClientConfig
+from .config_lekiwi import LeKiwiConfig
 
 logger = logging.getLogger(__name__)
 
@@ -59,22 +59,86 @@ class LeKiwi(Robot):
         self.config = config
         norm_mode_body = MotorNormMode.DEGREES if config.use_degrees else MotorNormMode.RANGE_M100_100
 
-
-        self.left_bus = FeetechMotorsBus(
-            port=self.config.left_port,
-            motors={
-                # arm
+        if config.arm_profile == "am-arm-6dof":
+            left_arm_motors_cfg = {
+                "arm_left_shoulder_pan": Motor(1, "sts3215", norm_mode_body),
+                "arm_left_shoulder_lift": Motor(2, "sts3095", norm_mode_body),
+                "arm_left_elbow_flex": Motor(3, "sts3095", norm_mode_body),
+                "arm_left_wrist_flex": Motor(4, "sts3215", norm_mode_body),
+                "arm_left_wrist_yaw": Motor(5, "sts3215", norm_mode_body),
+                "arm_left_wrist_roll": Motor(6, "sts3215", norm_mode_body),
+                "arm_left_gripper": Motor(7, "sts3215", MotorNormMode.RANGE_0_100),
+            }
+            right_arm_motors_cfg = {
+                "arm_right_shoulder_pan": Motor(1, "sts3215", norm_mode_body),
+                "arm_right_shoulder_lift": Motor(2, "sts3095", norm_mode_body),
+                "arm_right_elbow_flex": Motor(3, "sts3095", norm_mode_body),
+                "arm_right_wrist_flex": Motor(4, "sts3215", norm_mode_body),
+                "arm_right_wrist_yaw": Motor(5, "sts3215", norm_mode_body),
+                "arm_right_wrist_roll": Motor(6, "sts3215", norm_mode_body),
+                "arm_right_gripper": Motor(7, "sts3215", MotorNormMode.RANGE_0_100),
+            }
+            self._left_arm_state_keys = (
+                "arm_left_shoulder_pan.pos",
+                "arm_left_shoulder_lift.pos",
+                "arm_left_elbow_flex.pos",
+                "arm_left_wrist_flex.pos",
+                "arm_left_wrist_yaw.pos",
+                "arm_left_wrist_roll.pos",
+                "arm_left_gripper.pos",
+            )
+            self._right_arm_state_keys = (
+                "arm_right_shoulder_pan.pos",
+                "arm_right_shoulder_lift.pos",
+                "arm_right_elbow_flex.pos",
+                "arm_right_wrist_flex.pos",
+                "arm_right_wrist_yaw.pos",
+                "arm_right_wrist_roll.pos",
+                "arm_right_gripper.pos",
+            )
+        elif config.arm_profile == "so-arm-5dof":
+            left_arm_motors_cfg = {
                 "arm_left_shoulder_pan": Motor(1, "sts3215", norm_mode_body),
                 "arm_left_shoulder_lift": Motor(2, "sts3215", norm_mode_body),
                 "arm_left_elbow_flex": Motor(3, "sts3215", norm_mode_body),
                 "arm_left_wrist_flex": Motor(4, "sts3215", norm_mode_body),
-                #"arm_left_wrist_yaw": Motor(5, "sts3215", norm_mode_body),
                 "arm_left_wrist_roll": Motor(5, "sts3215", norm_mode_body),
                 "arm_left_gripper": Motor(6, "sts3215", MotorNormMode.RANGE_0_100),
-                # base
-                "base_left_wheel": Motor(8, "sts3215", MotorNormMode.RANGE_M100_100),
-                "base_back_wheel": Motor(9, "sts3215", MotorNormMode.RANGE_M100_100),
-                "base_right_wheel": Motor(10, "sts3215", MotorNormMode.RANGE_M100_100),
+            }
+            right_arm_motors_cfg = {
+                "arm_right_shoulder_pan": Motor(1, "sts3215", norm_mode_body),
+                "arm_right_shoulder_lift": Motor(2, "sts3215", norm_mode_body),
+                "arm_right_elbow_flex": Motor(3, "sts3215", norm_mode_body),
+                "arm_right_wrist_flex": Motor(4, "sts3215", norm_mode_body),
+                "arm_right_wrist_roll": Motor(5, "sts3215", norm_mode_body),
+                "arm_right_gripper": Motor(6, "sts3215", MotorNormMode.RANGE_0_100),
+            }
+            self._left_arm_state_keys = (
+                "arm_left_shoulder_pan.pos",
+                "arm_left_shoulder_lift.pos",
+                "arm_left_elbow_flex.pos",
+                "arm_left_wrist_flex.pos",
+                "arm_left_wrist_roll.pos",
+                "arm_left_gripper.pos",
+            )
+            self._right_arm_state_keys = (
+                "arm_right_shoulder_pan.pos",
+                "arm_right_shoulder_lift.pos",
+                "arm_right_elbow_flex.pos",
+                "arm_right_wrist_flex.pos",
+                "arm_right_wrist_roll.pos",
+                "arm_right_gripper.pos",
+            )
+        else:
+            raise ValueError(
+                f"Unknown arm_profile '{config.arm_profile}'. Expected 'so-arm-5dof' or 'am-arm-6dof'."
+            )
+
+        self.left_bus = FeetechMotorsBus(
+            port=self.config.left_port,
+            motors={
+                **left_arm_motors_cfg,
+                # lift axis
                 "lift_axis": Motor(11, "sts3215", MotorNormMode.DEGREES),
             },
             calibration=self.calibration,
@@ -83,22 +147,25 @@ class LeKiwi(Robot):
         self.right_bus = FeetechMotorsBus(
             port=self.config.right_port,
             motors={
-                # arm
-                "arm_right_shoulder_pan": Motor(1, "sts3215", norm_mode_body),
-                "arm_right_shoulder_lift": Motor(2, "sts3215", norm_mode_body),
-                "arm_right_elbow_flex": Motor(3, "sts3215", norm_mode_body),
-                "arm_right_wrist_flex": Motor(4, "sts3215", norm_mode_body),
-                #"arm_right_wrist_yaw": Motor(5, "sts3215", norm_mode_body),
-                "arm_right_wrist_roll": Motor(5, "sts3215", norm_mode_body),
-                "arm_right_gripper": Motor(6, "sts3215", MotorNormMode.RANGE_0_100),
+                **right_arm_motors_cfg,
                 #"lift_axis": Motor(12, "sts3215", MotorNormMode.DEGREES),
+            },
+            calibration=self.calibration,
+        )
+
+        self.base_bus = FeetechMotorsBus(
+            port=self.config.base_port,
+            motors={
+                "base_left_wheel": Motor(8, "sts3215", MotorNormMode.RANGE_M100_100),
+                "base_back_wheel": Motor(9, "sts3215", MotorNormMode.RANGE_M100_100),
+                "base_right_wheel": Motor(10, "sts3215", MotorNormMode.RANGE_M100_100),
             },
             calibration=self.calibration,
         )
 
 
         self.left_arm_motors  = [m for m in self.left_bus.motors        if m.startswith("arm_left_")]
-        self.base_motors      = [m for m in self.left_bus.motors        if m.startswith("base_")]
+        self.base_motors      = [m for m in self.base_bus.motors]
         #self.left_arm_motors  = [m for m in self.left_bus.motors        if m.startswith("right_arm_")]
 
         self.right_arm_motors = [m for m in (self.right_bus.motors if self.right_bus else []) if m.startswith("arm_right_")]
@@ -117,26 +184,15 @@ class LeKiwi(Robot):
         # Overcurrent debounce: require N consecutive over-limit reads
         self._overcurrent_count: dict[str, int] = {}
         self._overcurrent_trip_n = 20
+        self._last_currents_log_t = 0.0
 
 
     @property
     def _state_ft(self) -> dict[str, type]:
         return dict.fromkeys(
             (
-                "arm_left_shoulder_pan.pos",
-                "arm_left_shoulder_lift.pos",
-                "arm_left_elbow_flex.pos",
-                "arm_left_wrist_flex.pos",
-                #"left_wrist_yaw.pos",
-                "arm_left_wrist_roll.pos",
-                "arm_left_gripper.pos",
-                "arm_right_shoulder_pan.pos",
-                "arm_right_shoulder_lift.pos",
-                "arm_right_elbow_flex.pos",
-                "arm_right_wrist_flex.pos",
-                #"right_wrist_yaw.pos",
-                "arm_right_wrist_roll.pos",
-                "arm_right_gripper.pos",
+                *self._left_arm_state_keys,
+                *self._right_arm_state_keys,
                 "x.vel",
                 "y.vel",
                 "theta.vel",
@@ -187,7 +243,7 @@ class LeKiwi(Robot):
         logger.info(f"{self} connected.")
 
         self.lift.home()
-        logger.info("Lift axis homed to 0mm.")
+        print("Lift axis homed to 0mm.")
 
         
 
@@ -239,10 +295,16 @@ class LeKiwi(Robot):
             left_homing[wheel] = 0
 
         motors_left_all = self.left_arm_motors + self.base_motors
-        full_turn_left = [m for m in motors_left_all if m.startswith("base_")]  # three wheels
+        left_full_turn_motor = "arm_left_wrist_roll"
+        full_turn_left = [m for m in motors_left_all if m.startswith("base_")]  # three base wheels
+        if left_full_turn_motor in motors_left_all:
+            full_turn_left.append(left_full_turn_motor)
         unknown_left = [m for m in motors_left_all if m not in full_turn_left]
 
-        print("Move LEFT arm joints sequentially through full ROM. Press ENTER to stop...")
+        print(
+            f"Move LEFT arm joints sequentially through full ROM (except '{left_full_turn_motor}'). "
+            "Press ENTER to stop..."
+        )
         l_mins, l_maxs = self.left_bus.record_ranges_of_motion(unknown_left)
         for m in full_turn_left:
             l_mins[m] = 0
@@ -259,8 +321,18 @@ class LeKiwi(Robot):
             input("Move RIGHT arm to the middle of its range of motion, then press ENTER...")
             right_homing = self.right_bus.set_half_turn_homings(self.right_arm_motors)
 
-            print("Move RIGHT arm joints sequentially through full ROM. Press ENTER to stop...")
-            r_mins, r_maxs = self.right_bus.record_ranges_of_motion(self.right_arm_motors)
+            right_full_turn_motor = "arm_right_wrist_roll"
+            full_turn_right = [right_full_turn_motor] if right_full_turn_motor in self.right_arm_motors else []
+            unknown_right = [m for m in self.right_arm_motors if m not in full_turn_right]
+
+            print(
+                f"Move RIGHT arm joints sequentially through full ROM (except '{right_full_turn_motor}'). "
+                "Press ENTER to stop..."
+            )
+            r_mins, r_maxs = self.right_bus.record_ranges_of_motion(unknown_right)
+            for m in full_turn_right:
+                r_mins[m] = 0
+                r_maxs[m] = 4095
 
         # Merge → filter by bus and write back → save as a single file
         self.calibration = {}
@@ -296,6 +368,9 @@ class LeKiwi(Robot):
 
         self._save_calibration()
         print("Calibration saved to", self.calibration_fpath)
+
+
+
 
 
     def configure(self):
@@ -598,12 +673,14 @@ class LeKiwi(Robot):
         if getattr(self, "right_bus", None):
             right_curr_raw = self.right_bus.sync_read("Present_Current", list(self.right_bus.motors.keys()))
 
-        if print_currents:
-            left_line = "{" + ",".join(str(int(v * scale)) for v in left_curr_raw.values()) + "}"
-            #print(f"Left Bus currents(ma): {left_line}")
+        now = time.monotonic()
+        if print_currents and (now - self._last_currents_log_t >= 1.0):
+            left_arr = [int(float(raw) * scale) for raw in left_curr_raw.values()]
+            print(f"[Currents][left_bus] {left_arr}")
             if right_curr_raw:
-                right_line = "{" + ",".join(str(int(v * scale)) for v in right_curr_raw.values()) + "}"
-                #print(f"Right Bus currents(ma): {right_line}")
+                right_arr = [int(float(raw) * scale) for raw in right_curr_raw.values()]
+                print(f"[Currents][right_bus] {right_arr}")
+            self._last_currents_log_t = now
 
         tripped = None
         for name, raw in {**left_curr_raw, **right_curr_raw}.items():

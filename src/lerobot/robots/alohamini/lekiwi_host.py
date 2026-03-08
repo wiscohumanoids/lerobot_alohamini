@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import base64
+import argparse
 import json
 import logging
 import time
@@ -23,12 +24,8 @@ import sys
 import cv2
 import zmq
 
-try:
-    from .config_lekiwi import LeKiwiConfig, LeKiwiHostConfig, LeKiwiClientConfig
-    from .lekiwi import LeKiwi
-except ImportError:
-    from config_lekiwi import LeKiwiConfig, LeKiwiHostConfig, LeKiwiClientConfig
-    from lekiwi import LeKiwi
+from .config_lekiwi import LeKiwiConfig, LeKiwiHostConfig
+from .lekiwi import LeKiwi
 
 
 class LeKiwiHost:
@@ -38,7 +35,7 @@ class LeKiwiHost:
         self.zmq_cmd_socket.setsockopt(zmq.CONFLATE, 1)
         self.zmq_cmd_socket.bind(f"tcp://*:{config.port_zmq_cmd}")
 
-        self.zmq_observation_socket = self.zmq_context.socket(zmq.PUB)
+        self.zmq_observation_socket = self.zmq_context.socket(zmq.PUSH)
         self.zmq_observation_socket.setsockopt(zmq.CONFLATE, 1)
         self.zmq_observation_socket.bind(f"tcp://*:{config.port_zmq_observations}")
 
@@ -53,8 +50,20 @@ class LeKiwiHost:
  
 
 def main():
+    parser = argparse.ArgumentParser(description="Run AlohaMini LeKiwi host process")
+    parser.add_argument(
+        "--arm_profile",
+        type=str,
+        default="so-arm-5dof",
+        choices=["so-arm-5dof", "am-arm-6dof"],
+        help="Follower arm profile selector.",
+    )
+    args = parser.parse_args()
+
+    logging.info("Configuring LeKiwi")
     robot_config = LeKiwiConfig()
     robot_config.id = "AlohaMiniRobot"
+    robot_config.arm_profile = args.arm_profile
     robot = LeKiwi(robot_config)
 
 
@@ -85,8 +94,7 @@ def main():
                 last_cmd_time = time.time()
                 watchdog_active = False
             except zmq.Again:
-                if not watchdog_active:
-                    logging.warning("No command available")
+                pass
             except Exception as e:
                 logging.exception("Message fetching failed: %s", e)
 
@@ -98,7 +106,7 @@ def main():
                 watchdog_active = True
                 robot.stop_base()
 
-            robot.lift.update()
+            
             last_observation = robot.get_observation()
 
             # Encode ndarrays to base64 strings

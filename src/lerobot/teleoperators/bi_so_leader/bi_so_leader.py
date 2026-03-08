@@ -18,7 +18,7 @@ import logging
 from functools import cached_property
 
 from lerobot.teleoperators.so_leader import SOLeaderTeleopConfig
-from lerobot.utils.decorators import check_if_not_connected
+from lerobot.utils.decorators import check_if_already_connected, check_if_not_connected
 
 from ..so_leader import SOLeader
 from ..teleoperator import Teleoperator
@@ -43,12 +43,16 @@ class BiSOLeader(Teleoperator):
             id=f"{config.id}_left" if config.id else None,
             calibration_dir=config.calibration_dir,
             port=config.left_arm_config.port,
+            arm_profile=config.left_arm_config.arm_profile,
+            use_degrees=config.left_arm_config.use_degrees,
         )
 
         right_arm_config = SOLeaderTeleopConfig(
             id=f"{config.id}_right" if config.id else None,
             calibration_dir=config.calibration_dir,
             port=config.right_arm_config.port,
+            arm_profile=config.right_arm_config.arm_profile,
+            use_degrees=config.right_arm_config.use_degrees,
         )
 
         self.left_arm = SOLeader(left_arm_config)
@@ -72,6 +76,7 @@ class BiSOLeader(Teleoperator):
     def is_connected(self) -> bool:
         return self.left_arm.is_connected and self.right_arm.is_connected
 
+    @check_if_already_connected
     def connect(self, calibrate: bool = True) -> None:
         self.left_arm.connect(calibrate)
         self.right_arm.connect(calibrate)
@@ -110,6 +115,7 @@ class BiSOLeader(Teleoperator):
         # TODO: Implement force feedback
         raise NotImplementedError
 
+    @check_if_not_connected
     def disconnect(self) -> None:
         self.left_arm.disconnect()
         self.right_arm.disconnect()

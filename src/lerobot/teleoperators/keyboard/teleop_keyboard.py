@@ -18,7 +18,6 @@ import logging
 import os
 import sys
 import time
-import termios
 from queue import Queue
 from typing import Any
 
@@ -30,7 +29,6 @@ from ..utils import TeleopEvents
 from .configuration_keyboard import (
     KeyboardEndEffectorTeleopConfig,
     KeyboardRoverTeleopConfig,
-    KeyboardSimTeleopConfig,
     KeyboardTeleopConfig,
 )
 
@@ -432,99 +430,3 @@ class KeyboardRoverTeleop(KeyboardTeleop):
             "linear.vel": linear_velocity,
             "angular.vel": angular_velocity,
         }
-
-
-
-class KeyboardSimTeleop(KeyboardTeleop):
-    """
-    Teleop class to use keyboard inputs for controlling the Aloha Mini in simulation.
-    """
-
-    config_class = KeyboardSimTeleopConfig
-    name = "keyboard_sim"
-
-    @property
-    def action_features(self) -> dict:
-        return {
-            "dtype": "float32",
-            "shape": (18,),
-            "names": {
-                "x.vel": 0,
-                "y.vel": 1,
-                "theta.vel": 2,
-                "lift_axis.height_mm": 3,
-                "arm_left_shoulder_pan.pos": 4,
-                "arm_left_shoulder_lift.pos": 5,
-                "arm_left_elbow_flex.pos": 6,
-                "arm_left_wrist_flex.pos": 7,
-                "arm_left_wrist_roll.pos": 8,
-                "arm_left_gripper.pos": 9,
-                "arm_right_shoulder_pan.pos": 10,
-                "arm_right_shoulder_lift.pos": 11,
-                "arm_right_elbow_flex.pos": 12,
-                "arm_right_wrist_flex.pos": 13,
-                "arm_right_wrist_roll.pos": 14,
-                "arm_right_gripper.pos": 15,
-            },
-        }
-    
-
-    def get_default_state(self):
-        state = {
-            "x.vel": 0.0,
-            "y.vel": 0.0,
-            "theta.vel": 0.0,
-            "lift_axis.height_mm": 300.0
-        }
-        for name in self.config.joint_names:
-            state[name] = 0.0
-        return state
-
-
-    def __init__(self, config: KeyboardTeleopConfig): 
-        super().__init__(config)
-        self.target_state = self.get_default_state()
-
-    @property
-    def is_calibrated(self) -> bool:
-        """NO NEED FOR CALIBRATION"""
-        return True
-
-    @check_if_not_connected
-    def get_action(self) -> RobotAction:
-        # Check which keys are currently pressed (not released)
-        active_keys = {key for key, is_pressed in self.current_pressed.items() if is_pressed}
-        for key in active_keys:
-            # RESET Logic
-            if key == ' ':
-                self.target_state = self.get_default_state()
-                #print("RESET TO DEFAULTS")
-
-            elif key == 'k':
-                self.target_state["x.vel"] = 0.0
-                self.target_state["y.vel"] = 0.0
-                self.target_state["theta.vel"] = 0.0
-                #print("VELOCITY STOP")
-
-            elif key in self.config.move_bindings:
-                attr, val = self.config.move_bindings[key]
-                self.target_state[attr] += val
-            
-            elif key in self.config.lift_bindings:
-                attr, val = self.config.lift_bindings[key]
-                self.target_state[attr] += val
-
-            elif key in self.config.joint_keys:
-                idx = self.config.joint_keys.index(key)
-                self.target_state[self.config.joint_names[idx]] += self.joint_increment
-                #print(f"Joint {self.JOINT_NAMES[idx]}: {self.target_state[self.JOINT_NAMES[idx]]:.3f}")
-
-            elif key in self.config.joint_reverse_keys:
-                idx = self.config.joint_reverse_keys.index(key)
-                self.target_state[self.config.joint_names[idx]] -= self.joint_increment
-                #print(f"Joint {self.JOINT_NAMES[idx]}: {self.target_state[self.JOINT_NAMES[idx]]:.3f}")
-
-               # self.target_state["x.vel"] = limit(self.target_state["x.vel"], -0.5, 0.5)
-                #self.target_state["y.vel"] = limit(self.target_state["y.vel"], -0.5, 0.5)
-
-        return self.target_state

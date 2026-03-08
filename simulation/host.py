@@ -4,6 +4,7 @@ import sys
 import cv2
 import json
 import time
+import math
 import random
 import base64
 import argparse
@@ -59,12 +60,12 @@ class IsaacWorld:
     def __init__(self, usd_path: str, aloha_prim_path: str, verbose=False):
         log("[World] Creating IsaacSim world...")
         self.isaacWorld = World(stage_units_in_meters=1.0)
-        self.isaacWorld.scene.add_default_ground_plane()    #  NECESSARY (!!) DESPITE APPARENT REDUNDANCY
 
-        add_reference_to_stage(usd_path=usd_path, prim_path=aloha_prim_path)
-        log(f"[World] Loaded USD asset from {usd_path} at prim path {aloha_prim_path}")
+        add_reference_to_stage(usd_path=usd_path, prim_path="/World/Scene")
 
-        self.aloha = AlohaSim(self.isaacWorld, aloha_prim_path, verbose=verbose)
+        log(f"[World] Loaded USD asset from {usd_path}")
+
+        #self.aloha = AlohaSim(self.isaacWorld, aloha_prim_path, verbose=verbose)
 
         #for prim_path in other_prim_paths:
         #    add_reference_to_stage(usd_path=usd_path, prim_path=prim_path)
@@ -82,14 +83,14 @@ class AlohaSim:
         log("[Aloha] Setting up sim robot w/ articulation...")
 
 
-        self.robot = Articulation(prim_path=self.prim_path, name="Aloha")
+        self.robot = Articulation(prim_path=self.prim_path, name="/World/Scene/AlohaMini")
                
         # Add cameras
-        self._add_camera("camera_front", "/Aloha/base_link/camera_front")   # figure out actual placements & base orientations
-        self._add_camera("camera_top", "/Aloha/base_link/camera_top")
-        self._add_camera("camera_back", "/Aloha/base_link/camera_back")
-        self._add_camera("camera_left", "/Aloha/left_Wrist_Pitch_Roll/camera_left")
-        self._add_camera("camera_right", "/Aloha/right_Wrist_Pitch_Roll/camera_right")
+        self._add_camera("camera_front", "/World/Scene/AlohaMini/base_link/camera_front")   # figure out actual placements & base orientations
+        self._add_camera("camera_top", "/World/Scene/AlohaMini/base_link/camera_top")
+        self._add_camera("camera_back", "/World/Scene/AlohaMini/base_link/camera_back")
+        self._add_camera("camera_left", "/World/Scene/AlohaMini/left_Wrist_Pitch_Roll/camera_left")
+        self._add_camera("camera_right", "/World/Scene/AlohaMini/right_Wrist_Pitch_Roll/camera_right")
 
         world.scene.add(self.robot)
         world.reset()
@@ -241,6 +242,10 @@ class AlohaSim:
                 continue
             if k.endswith(".pos"):
                 joint_name = k.replace(".pos", "").removeprefix("arm_")
+                if joint_name == "left_gripper" or joint_name == "right_gripper":
+                    v = (v - 45) * (63 / 45)
+                v = v * math.pi / 180.0
+
                 joint_cmds[joint_name] = v
             elif k in ["x.vel", "y.vel", "theta.vel"]:
                 if k == "x.vel":
@@ -330,12 +335,14 @@ def main():
     socket_sub.bind(f"tcp://0.0.0.0:{PORT_CMD}")
 
     log(f"[HOST] Loading simulation with USD asset '{args.usd_name}'...")
-    sim = IsaacWorld(f"./assets/{args.usd_name}", "/Aloha", verbose=args.verbose)
+    sim = IsaacWorld(f"./assets/{args.usd_name}", "/AlohaMini", verbose=args.verbose)
     log(f"[HOST] Simulator running on ports: OBS={PORT_OBS}, CMD={PORT_CMD}")
 
     try:
         while simulation_app.is_running():
             sim.isaacWorld.step(render=True)
+            time.sleep(1)
+            
             if not sim.isaacWorld.is_playing():
                 log("[HOST] Simulation is paused. Stepping until resumed...")
                 while not sim.isaacWorld.is_playing():

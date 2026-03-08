@@ -1,190 +1,127 @@
-import logging
-import argparse
-import inspect
-import json
-import os
-import time
-import zmq
-import sys
-from enum import Enum
+"""
+UNIVERSAL SCRIPT FOR TELEOPERATION IN ISAACSIM TO BE RUN FROM INSIDE THE DOCKER CONTAINER, LOCALLY
+"""
 
-from lerobot.teleoperators.keyboard.teleop_keyboard import KeyboardSimTeleop, KeyboardSimTeleopConfig
+
+
+CMD_PORT = 5555
+IP = "host.docker.internal"
+
+def log(msg: str):
+    print(f"\033[1;36m[TELEOP] {msg}\033[0m")
+
+def error(msg: str):
+    print(f"\033[1;31m[TELEOP] [ERROR] {msg}\033[0m")
+
+log("Teleop loading...")
+
+#from lerobot.teleoperators.keyboard.teleop_keyboard import KeyboardSimTeleop, KeyboardSimTeleopConfig
+
 from lerobot.teleoperators.bi_so_leader import BiSOLeader, BiSOLeaderConfig
 from lerobot.teleoperators.so_leader import SOLeaderConfig
 from lerobot.utils.robot_utils import precise_sleep
 
-from lerobot.teleoperators.phone.config_phone import PhoneConfig, PhoneOS
-from lerobot.teleoperators.phone.phone_processor import MapPhoneActionToRobotAction
-from lerobot.teleoperators.phone.teleop_phone import Phone
+log("Imports successful!")
 
-from lerobot.model.kinematics import RobotKinematics
-from lerobot.processor import RobotAction, RobotObservation, RobotProcessorPipeline
-from lerobot.robots.so_follower.robot_kinematic_processor import (
-    EEBoundsAndSafety,
-    EEReferenceAndDelta,
-    GripperVelocityToJoint,
-    InverseKinematicsEEToJoints,
-)
-from lerobot.processor.converters import (
-    robot_action_observation_to_transition,
-    transition_to_robot_action,
-)
+import sys
+import tty
+import zmq
+import math
+import time
+import json
+import select
+import termios
+import argparse
+import threading
+import queue
+from enum import Enum
 
 
-
-"""
-
-NOTE: THERE WERE RECENTLY SOME CHANGES WITH SSL CERTIFICATES AND SUCH, SO PHONE TELEOP MIGHT JUST NOT WORK AT ALL
-IN THAT CASE, I (AFTER MUCH TRIAL & ERROR) HAD TO APPLY AN INSECURE FIX AND FORCE CHROME ON MY PHONE TO RECOGNIZE CONNECTION AS SECURE
-
-"""
-
-
-
-class TeleopType(Enum):
-    LEADER = 1
-    KEYBOARD = 2
-    PHONE = 3
+KEYBOARD_BINDINGS = {
+    'w': ('x.vel', 0.05),
+    's': ('x.vel', -0.05),
+    'a': ('y.vel', 0.05),
+    'd': ('y.vel', -0.05),
+    'q': ('theta.vel', 0.05),
+    'e': ('theta.vel', -0.05),
+    'u': ('lift_axis.height_mm', 2.0),
+    'j': ('lift_axis.height_mm', -2.0),
+}
 
 
-def log(msg: str):
-    print(f"\033[1;36m{msg}\033[0m")
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--fps", type=int, default=30, help="Main loop frequency (frames per second)")
+    parser.add_argument("--leader_id", type=str, default="so101_leader_bi", help="Leader arm device ID")
+    parser.add_argument(
+        "--leader_profile",
+        type=str,
+        default="so-arm-5dof",
+        choices=["so-arm-5dof", "am-arm-6dof"],
+        help="Leader arm profile selector.",
+    )
+    parser.add_argument("--show_state", action="store_true", help="Continually show target state for debug")
+    parser.add_argument("--left_leader_port", type=str, default="/dev/am_arm_leader_left", help="USB device port for left leader arm, if necessary")
+    parser.add_argument("--right_leader_port", type=str, default="/dev/am_arm_leader_right", help="USB device port for right leader arm, if necessary")
 
-def error(msg: str):
-    print(f"\033[1;31m[ERROR] {msg}\033[0m")
-
-log("Teleop starting...")
-
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--type",
-    type=str,
-    choices=[member.name.lower() for member in TeleopType],
-    help="Type of teleop to use"
-)
-parser.add_argument("--fps", type=int, default=30, help="Main loop frequency (frames per second)")
-parser.add_argument("--leader_id", type=str, default="so101_leader_bi", help="Leader arm device ID")
-parser.add_argument(
-    "--leader_profile",
-    type=str,
-    default="so-arm-5dof",
-    choices=["so-arm-5dof", "am-arm-6dof"],
-    help="Leader arm profile selector.",
-)
-parser.add_argument("--show_state", action="store_true", help="Continually show target state for debug")
-
-args = parser.parse_args()
-if args.type is None or TeleopType[args.type.upper()] is None:
-    error("Must include a VALID teleop type with --type!")
+    try:
+        args = parser.parse_args()
+    except argparse.ArgumentError as e:
+        error(f"Argparse error: {e}")
+        sys.exit(-1)
 
 
-TELEOP_TYPE = TeleopType[args.type.upper()]
-CMD_PORT = 5555
-FPS = args.fps
-IP = "host.docker.internal"
+    log(f"Connecting with left_leader_port=\"{args.left_leader_port}\", right_leader_port=\"{args.right_leader_port}\"")
+    bi_config = BiSOLeaderConfig(
+        left_arm_config=SOLeaderConfig(
+            port=args.left_leader_port,
+            arm_profile=args.leader_profile,
+        ),
+        right_arm_config=SOLeaderConfig(
+            port=args.right_leader_port,
+            arm_profile=args.leader_profile,
+        ),
+        id=args.leader_id,
+    )
+    teleop = BiSOLeader(bi_config)
 
 
-match TELEOP_TYPE:
-    case TeleopType.LEADER:
-        bi_cfg = BiSOLeaderConfig(
-            left_arm_config=SOLeaderConfig(
-                port="/dev/am_arm_leader_left",
-                arm_profile=args.leader_profile,
-            ),
-            right_arm_config=SOLeaderConfig(
-                port="/dev/am_arm_leader_right",
-                arm_profile=args.leader_profile,
-            ),
-            id=args.leader_id,
-        )
-        teleop = BiSOLeader(bi_cfg)
-    case TeleopType.KEYBOARD:
-        keyboard_config = KeyboardSimTeleopConfig(id="keyboard")
-        teleop = KeyboardSimTeleop(keyboard_config)     # CURRENTLY BROKEN -- FIX LATER!!
-    case TeleopType.PHONE:
-        phone_config = PhoneConfig(phone_os=PhoneOS.ANDROID)
-        teleop = Phone(phone_config)
+    log(f"Connecting to command port {CMD_PORT} w/ host IP {IP}...")
+    context = zmq.Context()
+    cmd_socket = context.socket(zmq.PUSH)
+    cmd_socket.setsockopt(zmq.CONFLATE, 1)
+    cmd_socket.connect(f"tcp://{IP}:{CMD_PORT}")
 
-        ARM_JOINT_NAMES = {
-            "shoulder_pan",
-            "shoulder_lift",
-            "elbow_flex",
-            "wrist_flex",
-            "wrist_yaw",
-            "wrist_roll",
-            "gripper"
-        }
+    log("Connecting teleop...")
+    teleop.connect()
+    if not teleop.is_connected:
+        error("Teleop not able to connect!")
+        sys.exit(-1)
 
-        kinematics_solver = RobotKinematics(
-            urdf_path="./assets/SO101/so101_new_calib.urdf",
-            target_frame_name="gripper_frame_link",
-            joint_names=ARM_JOINT_NAMES
-        )
-
-        phone_to_robot_joints_processor = RobotProcessorPipeline[
-            tuple[RobotAction, RobotObservation], RobotAction
-        ](
-            steps=[
-                MapPhoneActionToRobotAction(platform=phone_config.phone_os),
-                EEReferenceAndDelta(
-                    kinematics=kinematics_solver,
-                    end_effector_step_sizes={"x": 0.5, "y": 0.5, "z": 0.5},
-                    motor_names=ARM_JOINT_NAMES,
-                    use_latched_reference=True,
-                ),
-                EEBoundsAndSafety(
-                    end_effector_bounds={"min": [-1.0, -1.0, -1.0], "max": [1.0, 1.0, 1.0]},
-                    max_ee_step_m=0.10,
-                ),
-                GripperVelocityToJoint(
-                    speed_factor=20.0,
-                ),
-                InverseKinematicsEEToJoints(
-                    kinematics=kinematics_solver,
-                    motor_names=ARM_JOINT_NAMES,
-                    initial_guess_current_joints=True,
-                ),
-            ],
-            to_transition=robot_action_observation_to_transition,
-            to_output=transition_to_robot_action,
-        )
+    # Main loop
 
 
-        pass
+    log("STARTING TELEOP")
+    try:
+        while True:
+            t0 = time.perf_counter()
 
+            arm_state = teleop.get_action()
 
-log(f"[SIM TELEOP] Connecting @ command port {CMD_PORT} w/ host IP {IP}")
-context = zmq.Context()
-cmd_socket = context.socket(zmq.PUSH)
-cmd_socket.setsockopt(zmq.CONFLATE, 1)
-cmd_socket.connect(f"tcp://{IP}:{CMD_PORT}")
+            target_state =  arm_state
 
+            cmd_socket.send_string(json.dumps(target_state))
 
-teleop.connect()
-if not teleop.is_connected:
-    error("Teleop not able to connect!")
-    sys.exit(-1)
+            if args.show_state:
+                print(target_state)
+                #print(f"\rSent: {json.dumps(formatted_state)}                   ", end="", flush=True)
+            precise_sleep(max(1.0 / args.fps - (time.perf_counter() - t0), 0.0))
+    except Exception as e:
+        error(f"Unknown exception: {e}")
+    finally:
+        log("Quitting teleop...")
+        cmd_socket.close()
+        context.term()
 
-log("Teleop connected!")
-
-# Main loop
-try:
-    while True:
-        t0 = time.perf_counter()
-
-        if TELEOP_TYPE is TeleopType.PHONE:
-           print(teleop.get_action())
-           # target_state = phone_to_robot_joints_processor((teleop.get_action(), None))
-        else:
-            target_state = teleop.get_action()
-        cmd_socket.send_string(json.dumps(target_state))
-
-        if args.show_state:
-            print(f"\rSent: {target_state}                       ", end="", flush=True)
-        precise_sleep(max(1.0 / FPS - (time.perf_counter() - t0), 0.0))
-except Exception as e:
-    error(f" Unknown exception: {e}")
-finally:
-    log("Quitting teleop...")
-    cmd_socket.close()
-    context.term()
+if __name__ == "__main__":
+    main()

@@ -61,7 +61,7 @@ DOCKER_ARGS=(
     -p 5555:5555
     -p 5556:5556
     -v "/tmp/.X11-unix:/tmp/.X11-unix"
-    -e "DISPLAY=${DISPLAY:-:0}"
+    -e "DISPLAY=${DISPLAY}"
     -e "PYTHONPATH=/workspace/src"
     -v $XSOCK:$XSOCK \
     -v $XAUTH:$XAUTH \
@@ -70,7 +70,9 @@ DOCKER_ARGS=(
     -v $XDG_RUNTIME_DIR:$XDG_RUNTIME_DIR \
     -e NVIDIA_DRIVER_CAPABILITIES=all \
     --runtime=nvidia \
-
+    --privileged \
+    -v /dev/bus/usb:/dev/bus/usb \
+    -v ../leader_calibration:/root/.cache/huggingface/lerobot/calibration/teleoperators/so_leader
     --gpus all
 )
 

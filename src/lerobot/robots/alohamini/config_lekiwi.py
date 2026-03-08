@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 from dataclasses import dataclass, field
 
 from lerobot.cameras.configs import CameraConfig, Cv2Rotation
@@ -21,34 +20,35 @@ from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig
 from ..config import RobotConfig
 
 
-
 def lekiwi_cameras_config() -> dict[str, CameraConfig]:
     return {
-        # might need to comment all of these out
-        "head_top": OpenCVCameraConfig(
-            index_or_path="/dev/am_camera_head_top", fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION
-        ),
-        "head_back": OpenCVCameraConfig(
-            index_or_path="/dev/am_camera_head_back", fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION
-        ),
-        "head_front": OpenCVCameraConfig(
-            index_or_path="/dev/am_camera_head_front", fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION
-        ),
-        "wrist_left": OpenCVCameraConfig(
-            index_or_path="/dev/am_camera_wrist_left", fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION
-        ),
-        "wrist_right": OpenCVCameraConfig(
-            index_or_path="/dev/am_camera_wrist_right", fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION
-        ),
+        # "head_top": OpenCVCameraConfig(
+        #     index_or_path="/dev/am_camera_head_top", fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION
+        # ),
+        # "head_back": OpenCVCameraConfig(
+        #     index_or_path="/dev/am_camera_head_back", fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION
+        # ),
+        # "head_front": OpenCVCameraConfig(
+        #     index_or_path="/dev/am_camera_head_front", fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION
+        # ),
+        # "wrist_left": OpenCVCameraConfig(
+        #     index_or_path="/dev/am_camera_wrist_left", fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION
+        # ),
+        # "wrist_right": OpenCVCameraConfig(
+        #     index_or_path="/dev/am_camera_wrist_right", fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION
+        # ),
     }
 
 
 @RobotConfig.register_subclass("lekiwi")
 @dataclass
 class LeKiwiConfig(RobotConfig):
-    left_port: str = os.getenv("LEKIWI_LEFT_PORT", "/dev/am_arm_follower_left")  # port to connect to the bus
-    right_port: str = os.getenv("LEKIWI_RIGHT_PORT", "/dev/am_arm_follower_right")  # port to connect to the bus
+    left_port: str = "/dev/am_arm_follower_left"  # port to connect to the bus
+    right_port: str = "/dev/am_arm_follower_right"  # port to connect to the bus
+    base_port: str = "/dev/am_base"
+
     disable_torque_on_disconnect: bool = True
+    arm_profile: str = "so-arm-5dof"  # "am-arm-6dof" or "so-arm-5dof"
 
     # `max_relative_target` limits the magnitude of the relative positional target vector for safety purposes.
     # Set this to a positive scalar to have the same value for all motors, or a list that is the same length as
@@ -72,8 +72,8 @@ class LeKiwiHostConfig:
     # Duration of the application
     connection_time_s: int = 6000
 
-    # Watchdog: stop the robot if no command is received for over 1.5 seconds.
-    watchdog_timeout_ms: int = 1500
+    # Watchdog: stop the robot if no command is received for over 3 seconds.
+    watchdog_timeout_ms: int = 3000
 
     # If robot jitters decrease the frequency and monitor cpu load with `top` in cmd
     max_loop_freq_hz: int = 30
@@ -94,10 +94,10 @@ class LeKiwiClientConfig(RobotConfig):
             # Movement
             "forward": "w",
             "backward": "s",
-            "left": "a",
-            "right": "d",
-            "rotate_left": "z",
-            "rotate_right": "x",
+            "left": "z",
+            "right": "x",
+            "rotate_left": "a",
+            "rotate_right": "d",
             # Speed control
             "speed_up": "r",
             "speed_down": "f",

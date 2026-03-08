@@ -25,7 +25,6 @@ import time
 import hebi
 import numpy as np
 from teleop import Teleop
-import uvicorn
 
 from lerobot.teleoperators.phone.config_phone import PhoneConfig, PhoneOS
 from lerobot.teleoperators.teleoperator import Teleoperator
@@ -33,7 +32,6 @@ from lerobot.utils.decorators import check_if_already_connected, check_if_not_co
 from lerobot.utils.rotation import Rotation
 
 logger = logging.getLogger(__name__)
-
 
 
 class BasePhone:
@@ -189,7 +187,7 @@ class IOSPhone(BasePhone, Teleoperator):
         enable = bool(raw_inputs.get("b1", 0))
 
         # Rising edge then re-capture calibration immediately from current raw pose
-        if enable and not self._enabled and raw_position is not None:
+        if enable and not self._enabled:
             self._reapply_position_calibration(raw_position)
 
         # Apply calibration
@@ -229,7 +227,7 @@ class AndroidPhone(BasePhone, Teleoperator):
     @check_if_already_connected
     def connect(self) -> None:
         logger.info("Starting teleop stream for Android...")
-        self._teleop = Teleop(host="*", port="8888")
+        self._teleop = Teleop()
         self._teleop.subscribe(self._android_callback)
         self._teleop_thread = threading.Thread(target=self._teleop.run, daemon=True)
         self._teleop_thread.start()
