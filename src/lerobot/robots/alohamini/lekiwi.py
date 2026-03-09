@@ -164,8 +164,8 @@ class LeKiwi(Robot):
         )
 
 
-        self.left_arm_motors  = [m for m in self.left_bus.motors        if m.startswith("arm_left_")]
-        self.base_motors      = [m for m in self.base_bus.motors]
+        self.left_arm_motors  = [m for m in self.left_bus.motors if m.startswith("arm_left_")]
+        self.base_motors      = [m for m in self.base_bus.motors if m.startswith("base_")]
         #self.left_arm_motors  = [m for m in self.left_bus.motors        if m.startswith("right_arm_")]
 
         self.right_arm_motors = [m for m in (self.right_bus.motors if self.right_bus else []) if m.startswith("arm_right_")]
@@ -230,6 +230,7 @@ class LeKiwi(Robot):
     def connect(self, calibrate: bool = True) -> None:
         self.left_bus.connect()
         self.right_bus.connect()
+        self.base_bus.connect()
         if not self.is_calibrated and calibrate:
             logger.info(
                 "Mismatch between calibration values in the motor and the calibration file or no calibration file found"
@@ -272,14 +273,19 @@ class LeKiwi(Robot):
                 self.left_bus.write_calibration(calib_left, cache=False)
                 self.left_bus.calibration = calib_left
 
-                if getattr(self, "right_bus", None):
-                    calib_right = {k: v for k, v in self.calibration.items() if k in self.right_bus.motors}
-                    self.right_bus.write_calibration(calib_right, cache=False)
-                    self.right_bus.calibration = calib_right
+                calib_right = {k: v for k, v in self.calibration.items() if k in self.right_bus.motors}
+                self.right_bus.write_calibration(calib_right, cache=False)
+                self.right_bus.calibration = calib_right
+
+                calib_base = {k: v for k, v in self.calibration.items() if k in self.base_bus.motors}
+                self.base_bus.write_calibration(calib_base, cache=False)
+                self.base_bus.calibration = calib_base
 
                 return
 
-        logger.info(f"\nRunning calibration of {self} (dual-bus if right_bus present)")
+        logger.info(f"\nRunning calibration of {self} (left, right, and base buses)")
+
+        # LEFT ARM CALIBRATION
 
         if not getattr(self, "left_arm_motors", None):
             raise RuntimeError("left_arm_motors is empty; expected names starting with 'left_arm_'")
@@ -289,17 +295,11 @@ class LeKiwi(Robot):
             self.left_bus.write("Operating_Mode", name, OperatingMode.POSITION.value)
 
         input("Move LEFT arm to the middle of its range of motion, then press ENTER...")
-        left_homing = self.left_bus.set_half_turn_homings(self.left_arm_motors)  # left arm only
+        left_homing = self.left_bus.set_half_turn_homings(self.left_arm_motors)
 
-        for wheel in self.base_motors:
-            left_homing[wheel] = 0
-
-        motors_left_all = self.left_arm_motors + self.base_motors
         left_full_turn_motor = "arm_left_wrist_roll"
-        full_turn_left = [m for m in motors_left_all if m.startswith("base_")]  # three base wheels
-        if left_full_turn_motor in motors_left_all:
-            full_turn_left.append(left_full_turn_motor)
-        unknown_left = [m for m in motors_left_all if m not in full_turn_left]
+        full_turn_left = [left_full_turn_motor] if left_full_turn_motor in self.left_arm_motors else []
+        unknown_left = [m for m in self.left_arm_motors if m not in full_turn_left]
 
         print(
             f"Move LEFT arm joints sequentially through full ROM (except '{left_full_turn_motor}'). "
@@ -313,26 +313,51 @@ class LeKiwi(Robot):
         right_homing = {}
         r_mins, r_maxs = {}, {}
 
-        if getattr(self, "right_bus", None) and getattr(self, "right_arm_motors", None):
-            self.right_bus.disable_torque(self.right_arm_motors)
-            for name in self.right_arm_motors:
-                self.right_bus.write("Operating_Mode", name, OperatingMode.POSITION.value)
 
-            input("Move RIGHT arm to the middle of its range of motion, then press ENTER...")
-            right_homing = self.right_bus.set_half_turn_homings(self.right_arm_motors)
+        # RIGHT ARM CALIBRATION
 
-            right_full_turn_motor = "arm_right_wrist_roll"
-            full_turn_right = [right_full_turn_motor] if right_full_turn_motor in self.right_arm_motors else []
-            unknown_right = [m for m in self.right_arm_motors if m not in full_turn_right]
+        if not getattr(self, "right_arm_motors", None):
+            raise RuntimeError("right_arm_motors is empty; expected names starting with 'right_arm_'")
 
-            print(
-                f"Move RIGHT arm joints sequentially through full ROM (except '{right_full_turn_motor}'). "
-                "Press ENTER to stop..."
-            )
-            r_mins, r_maxs = self.right_bus.record_ranges_of_motion(unknown_right)
-            for m in full_turn_right:
-                r_mins[m] = 0
-                r_maxs[m] = 4095
+        self.right_bus.disable_torque(self.right_arm_motors)
+        for name in self.right_arm_motors:
+            self.right_bus.write("Operating_Mode", name, OperatingMode.POSITION.value)
+
+        input("Move RIGHT arm to the middle of its range of motion, then press ENTER...")
+        right_homing = self.right_bus.set_half_turn_homings(self.right_arm_motors)
+
+        right_full_turn_motor = "arm_right_wrist_roll"
+        full_turn_right = [right_full_turn_motor] if right_full_turn_motor in self.right_arm_motors else []
+        unknown_right = [m for m in self.right_arm_motors if m not in full_turn_right]
+
+        print(
+            f"Move RIGHT arm joints sequentially through full ROM (except '{right_full_turn_motor}'). "
+            "Press ENTER to stop..."
+        )
+        r_mins, r_maxs = self.right_bus.record_ranges_of_motion(unknown_right)
+        for m in full_turn_right:
+            r_mins[m] = 0
+            r_maxs[m] = 4095
+
+
+        # BASE MOTOR CALIBRATION
+
+        if not getattr(self, "base_motors", None):
+            raise RuntimeError("base_motors is empty; expected names starting with 'base_'")
+        
+        self.base_bus.disable_torque(self.base_motors)
+        for name in self.base_motors:
+            self.base_bus.write("Operating_Mode", name, OperatingMode.POSITION.value)
+
+        base_homing = {}
+        for wheel in self.base_motors:
+            base_homing[wheel] = 0
+
+        b_mins, b_maxs = {}, {}
+        for m in self.base_motors:
+            b_mins[m] = 0
+            b_maxs[m] = 4095
+
 
         # Merge → filter by bus and write back → save as a single file
         self.calibration = {}
@@ -346,25 +371,36 @@ class LeKiwi(Robot):
                 range_max=l_maxs.get(name, 4095),
             )
 
-        if getattr(self, "right_bus", None):
-            for name, motor in self.right_bus.motors.items():
-                self.calibration[name] = MotorCalibration(
-                    id=motor.id,
-                    drive_mode=0,
-                    homing_offset=right_homing.get(name, 0),
-                    range_min=r_mins.get(name, 0),
-                    range_max=r_maxs.get(name, 4095),
-                )
+        for name, motor in self.right_bus.motors.items():
+            self.calibration[name] = MotorCalibration(
+                id=motor.id,
+                drive_mode=0,
+                homing_offset=right_homing.get(name, 0),
+                range_min=r_mins.get(name, 0),
+                range_max=r_maxs.get(name, 4095),
+            )
+
+        for name, motor in self.base_bus.motors.items():
+            self.calibration[name] = MotorCalibration(
+                id=motor.id,
+                drive_mode=0,
+                homing_offset=base_homing.get(name, 0),
+                range_min=b_mins.get(name, 0),
+                range_max=b_maxs.get(name, 4095),
+            )
 
         # Write back: each bus only writes its own entries to avoid KeyError
         calib_left = {k: v for k, v in self.calibration.items() if k in self.left_bus.motors}
         self.left_bus.write_calibration(calib_left, cache=False)
         self.left_bus.calibration = calib_left
 
-        if getattr(self, "right_bus", None):
-            calib_right = {k: v for k, v in self.calibration.items() if k in self.right_bus.motors}
-            self.right_bus.write_calibration(calib_right, cache=False)
-            self.right_bus.calibration = calib_right
+        calib_right = {k: v for k, v in self.calibration.items() if k in self.right_bus.motors}
+        self.right_bus.write_calibration(calib_right, cache=False)
+        self.right_bus.calibration = calib_right
+
+        calib_base = {k: v for k, v in self.calibration.items() if k in self.base_bus.motors}
+        self.base_bus.write_calibration(calib_base, cache=False)
+        self.base_bus.calibration = calib_base
 
         self._save_calibration()
         print("Calibration saved to", self.calibration_fpath)
@@ -388,7 +424,7 @@ class LeKiwi(Robot):
             self.left_bus.write("D_Coefficient", name, 32)
 
         for name in self.base_motors:
-            self.left_bus.write("Operating_Mode", name, OperatingMode.VELOCITY.value)
+            self.base_bus.write("Operating_Mode", name, OperatingMode.VELOCITY.value)
 
         #self.left_bus.enable_torque()
 
@@ -407,10 +443,15 @@ class LeKiwi(Robot):
 
 
     def setup_motors(self) -> None:
-        for motor in chain(reversed(self.arm_motors), reversed(self.base_motors)):
+        for motor in chain(reversed(self.arm_motors)):
             input(f"Connect the controller board to the '{motor}' motor only and press enter.")
             self.left_bus.setup_motor(motor)
             print(f"'{motor}' motor id set to {self.left_bus.motors[motor].id}")
+        for motor in chain(reversed(self.base_motors)):
+            input(f"Connect the controller board to the '{motor}' motor only and press enter.")
+            self.base_bus.setup_motor(motor)
+            print(f"'{motor}' motor id set to {self.base_bus.motors[motor].id}")
+
 
     @staticmethod
     def _degps_to_raw(degps: float) -> int:
@@ -562,7 +603,7 @@ class LeKiwi(Robot):
         left_pos = self.left_bus.sync_read("Present_Position", self.left_arm_motors)   # left_arm_*
 
 
-        base_wheel_vel = self.left_bus.sync_read("Present_Velocity", self.base_motors)
+        base_wheel_vel = self.base_bus.sync_read("Present_Velocity", self.base_motors)
 
         base_vel = self._wheel_raw_to_body(
             base_wheel_vel["base_left_wheel"],
@@ -661,7 +702,7 @@ class LeKiwi(Robot):
 
 
     def stop_base(self):
-        self.left_bus.sync_write("Goal_Velocity", dict.fromkeys(self.base_motors, 0), num_retry=0)
+        self.base_bus.sync_write("Goal_Velocity", dict.fromkeys(self.base_motors, 0), num_retry=0)
         logger.info("Base motors stopped")
 
     def read_and_check_currents(self, limit_ma, print_currents):
