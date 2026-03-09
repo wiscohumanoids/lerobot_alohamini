@@ -41,18 +41,18 @@ if NO_LEADER:
 robot_config = LeKiwiClientConfig(remote_ip=args.remote_ip, id="my_alohamini")
 bi_cfg = BiSOLeaderConfig(
     left_arm_config=SOLeaderConfig(
-        port="/dev/am_arm_leader_left",
+        port="/dev/ttyACM0",
         arm_profile=args.arm_profile,
     ),
     right_arm_config=SOLeaderConfig(
-        port="/dev/am_arm_leader_right",
+        port="/dev/ttyACM1",
         arm_profile=args.arm_profile,
     ),
     id=args.leader_id,
 )
 leader = BiSOLeader(bi_cfg)
-keyboard_config = KeyboardTeleopConfig(id="my_laptop_keyboard")
-keyboard = KeyboardTeleop(keyboard_config)
+#keyboard_config = KeyboardTeleopConfig(id="my_laptop_keyboard")
+#keyboard = KeyboardTeleop(keyboard_config)
 robot = LeKiwiClient(robot_config)
 
 # Connection logic
@@ -66,14 +66,14 @@ if not NO_LEADER:
 else:
     print("🧪 robot.connect() skipped, only printing actions.")
 
-keyboard.connect()
+#keyboard.connect()
 
 
 
 init_rerun(session_name="lekiwi_teleop")
 
-if not robot.is_connected or not leader.is_connected or not keyboard.is_connected:
-    print("⚠️ Warning: Some devices are not connected! Still running for debug.")
+#if not robot.is_connected or not leader.is_connected or not keyboard.is_connected:
+#    print("⚠️ Warning: Some devices are not connected! Still running for debug.")
 
 # Main loop
 while True:
@@ -82,11 +82,18 @@ while True:
     observation = robot.get_observation() if not NO_ROBOT else {}
     arm_actions = leader.get_action() if not NO_LEADER else {}
     arm_actions = {f"arm_{k}": v for k, v in arm_actions.items()}
-    keyboard_keys = keyboard.get_action()
-    base_action = robot._from_keyboard_to_base_action(keyboard_keys)
-    lift_action = robot._from_keyboard_to_lift_action(keyboard_keys)
+    #keyboard_keys = keyboard.get_action()
+    #base_action = robot._from_keyboard_to_base_action(keyboard_keys)
+    #lift_action = robot._from_keyboard_to_lift_action(keyboard_keys)
 
-    action = {**arm_actions, **base_action, **lift_action}
+    debug_placeholders = {
+        "lift_axis.height_mm": 300.0,
+        "x.vel": 0.0,
+        "y.vel": 0.0,
+        "theta.vel": 0.0
+    }
+    action = {**arm_actions, **debug_placeholders}
+    #action = {**arm_actions, **base_action, **lift_action}
     log_rerun_data(observation, action)
 
     if not NO_ROBOT:
