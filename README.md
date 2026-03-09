@@ -1,87 +1,36 @@
-## Updates
-- **[2025-1-25]** Compatible with LeRobot 0.4.3 Release
-- **[2025-11-06]** Compatible with LeRobot 0.4
+## Wiscohumanoids AlohaMini
 
+Please refer to [our Wiscohumanoid-specific readme](./wiscohumanoid/README.md) for detailed setup instructions.
 
-## Introduction
-
-Compared to the original lerobot, lerobot_alohamini significantly enhances debugging capabilities and is adapted for AlohaMini wheeled dual-arm robot hardware (based on Lekiwi extension).
-
-For newly added debugging commands, please refer to:
-[Debug Command Summary](examples/debug/README.md)
-
-AlohaMini Hardware 
 ![alohamini concept](examples/alohamini/media/alohamini3a.png)  
 
+---
 
-## Getting Started (Ubuntu System)
+For newly added debugging commands, please refer to [Debug Command Summary](examples/debug/README.md).
 
-*** Highly recommended to follow the sequence ***
-
-### 1. Preparation
-
-#### Network Environment Test
-```
-curl https://www.google.com
-curl https://huggingface.co
-```
-First ensure network connectivity
-
-#### CUDA Environment Test
-```
-nvidia-smi
-```
-After entering in terminal, you should be able to see the CUDA version number
-
-
-### 2. Clone lerobot_alohamini Repository
-
-```
-cd ~
-git clone https://github.com/liyiteng/lerobot_alohamini.git
-```
-
-### 3. Serial Port Authorization
 By default, serial ports cannot be accessed. We need to authorize the ports. The lerobot official documentation example modifies serial port permissions to 666, but in practice, this needs to be reset after each computer restart, which is very troublesome. It's recommended to directly add the current user to the device user group for a permanent solution.
 1. Enter `whoami` in terminal  // Check current username
 2. Enter `sudo usermod -a -G dialout username` // Permanently add username to device user group
 3. Restart computer to make permissions effective
 
-### 4. Install conda3 and Environment Dependencies
-
-Install conda3 
-```
-mkdir -p ~/miniconda3
-wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh
-bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
-rm ~/miniconda3/miniconda.sh
-~/miniconda3/bin/conda init bash
-source ~/.bashrc
-```
 
 
 
-Initialize conda3
-```
-conda create -y -n lerobot_alohamini python=3.10
-conda activate lerobot_alohamini
-```
-
-Install environment dependencies
-```
-cd ~/lerobot_alohamini
-pip install -e .[all]
-pip install pyzmq
-pip install feetech-servo-sdk
-conda install ffmpeg=7.1.1 -c conda-forge
-```
 
 
-Note:If installing on Raspberry Pi, make sure to use an ARM-specific conda distribution.
 
-//ARM build
-wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh \
--O ~/miniforge3/miniforge.sh
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### 5. Configure Robot Arm Port Numbers
 

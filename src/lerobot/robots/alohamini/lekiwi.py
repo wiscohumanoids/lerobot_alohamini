@@ -406,9 +406,6 @@ class LeKiwi(Robot):
         print("Calibration saved to", self.calibration_fpath)
 
 
-
-
-
     def configure(self):
         # Set-up arm actuators (position mode)
         # We assume that at connection time, arm is in a rest position,
