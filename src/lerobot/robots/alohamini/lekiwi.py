@@ -692,7 +692,7 @@ class LeKiwi(Robot):
             self.left_bus.sync_write("Goal_Position", {k.replace(".pos", ""): v for k, v in left_pos.items()})
         if self.right_bus and right_pos:
             self.right_bus.sync_write("Goal_Position", {k.replace(".pos", ""): v for k, v in right_pos.items()})
-        self.left_bus.sync_write("Goal_Velocity", base_wheel_goal_vel)
+        self.base_bus.sync_write("Goal_Velocity", base_wheel_goal_vel)
 
         lift_sent = {k: v for k, v in action.items() if k.startswith("lift_axis.")}
         return {**left_pos, **right_pos, **base_goal_vel, **lift_sent}
