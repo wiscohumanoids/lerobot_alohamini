@@ -2,6 +2,10 @@ import argparse
 import inspect
 import os
 import time
+import termios
+import select
+import sys
+import tty
 
 from lerobot.robots.alohamini import LeKiwiClient, LeKiwiClientConfig
 from lerobot.teleoperators.keyboard.teleop_keyboard import KeyboardTeleop, KeyboardTeleopConfig
@@ -68,6 +72,20 @@ else:
 
 #keyboard.connect()
 
+settings = termios.tcgetattr(sys.stdin)
+
+def getKey():
+    tty.setraw(sys.stdin.fileno())
+    rlist, _, _ = select.select([sys.stdin], [], [], 0.1)
+    if rlist:
+        key = sys.stdin.read(1)
+    else:
+        key = ''
+    termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
+    return key
+
+def limit(val, min_val, max_val):
+    return max(min(val, max_val), min_val)
 
 
 init_rerun(session_name="lekiwi_teleop")
@@ -76,6 +94,13 @@ init_rerun(session_name="lekiwi_teleop")
 #    print("⚠️ Warning: Some devices are not connected! Still running for debug.")
 
 # Main loop
+debug = {
+    "lift_axis.height_mm": 300.0,
+    "x.vel": 0.0,
+    "y.vel": 0.0,
+    "theta.vel": 0.0
+}
+
 while True:
     t0 = time.perf_counter()
 
@@ -86,13 +111,28 @@ while True:
     #base_action = robot._from_keyboard_to_base_action(keyboard_keys)
     #lift_action = robot._from_keyboard_to_lift_action(keyboard_keys)
 
-    debug_placeholders = {
-        "lift_axis.height_mm": 300.0,
-        "x.vel": 0.0,
-        "y.vel": 0.0,
-        "theta.vel": 0.0
+    MOVE_BINDINGS = {
+        'w': ('x.vel', 0.1),
+        's': ('x.vel', -0.1),
+        'a': ('y.vel', 0.1),
+        'd': ('y.vel', -0.1),
+        'q': ('theta.vel', 8.0),
+        'e': ('theta.vel', -8.0),
+        'u': ('lift_axis.height_mm', 4.0),
+        'j': ('lift_axis.height_mm', -4.0),
     }
-    action = {**arm_actions, **debug_placeholders}
+
+    debug["x.vel"] = 0.0
+    debug["y.vel"] = 0.0
+    debug["theta.vel"] = 0.0
+
+    key = getKey()
+    if key != 'k' and key in MOVE_BINDINGS:
+        attr, val = MOVE_BINDINGS[key]
+        debug[attr] += val
+            
+
+    action = {**arm_actions, **debug}
     #action = {**arm_actions, **base_action, **lift_action}
     log_rerun_data(observation, action)
 
