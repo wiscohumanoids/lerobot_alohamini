@@ -1,90 +1,60 @@
-# Wisconsin Humanoids - AlohaMini Setup
+# WiscoHumanoids AlohaMini
 
-This directory contains the Docker environment and documentation for getting started with the AlohaMini robot.
+
+
+
 
 ## Directory Structure
 
-```
-wiscohumanoid/           # folder for wiscohumanoids-specific work
-├── docker/              # docker container setup
-│   ├── Dockerfile       # container image definition
-│   ├── build.sh         # script to BUILD the docker image (generally a one-time thing)
-│   ├── build.sh         # script to JOIN an already running container (create a new shell/terminal in that container instance)
-│   └── run.sh           # script to RUN the container (do this on startup)
-│
+Since this is a fork of a fork of an open-source repo, it's a fair bit messy. Overall structure for our purposes is as follows:
 
-└── docs/                # Documentation & guides
-    ├── STARTUP_GUIDE.md              # Start here! Quick setup guide
-    ├── ALOHAMINI_ARCHITECTURE.md     # Complete system architecture
-    ├── ALOHAMINI_CAPABILITIES_REPORT.md  # Current state & roadmap
-    ├── DEPLOYMENT_GUIDE.md           # Hardware deployment guide
-    └── AlohaMini_Walkthrough.ipynb   # Interactive tutorial notebook
+```
+lerobot_alohamini/
+├── src/
+|   ├── utils/           # WA-AM-specific source for teleop, data, server, etc.
+|   └── lerobot/         # modified LeRobot source
+├── simulation/          # scripts & assets for simulation
+├── ...
+└── wiscohumanoid/       # our extra scripts, setup, info, etc.
+    ├── docker/          # docker container setup
+    ├── scripts/         # scripts for simple operation
+    └── docs/            # documentation & guides
 ```
 
-## Quick Start
+## Setup & Onboarding
 
-### 1. Build Docker Image
-
-From the **project root** (`lerobot_alohamini/`):
-
-```bash
-wiscohumanoid/docker/build.sh
-```
-
-### 2. Run Container
-
-```bash
-wiscohumanoid/docker/run.sh
-```
-
-### 3. Explore Documentation
-
-Inside the container:
-
-```bash
-# View startup guide
-cat docs/STARTUP_GUIDE.md | less
-
-# View architecture
-cat docs/ALOHAMINI_ARCHITECTURE.md | less
-
-# Run interactive notebook
-jupyter notebook docs/AlohaMini_Walkthrough.ipynb
-```
-
-## Documentation Guide
-
-### For New Team Members
-1. **Start with**: [`docs/STARTUP_GUIDE.md`](docs/STARTUP_GUIDE.md)
-   Quick 5-step guide to build Docker and explore the codebase
-
-2. **Then read**: [`docs/ALOHAMINI_ARCHITECTURE.md`](docs/ALOHAMINI_ARCHITECTURE.md)
-   Comprehensive technical deep-dive into the system
-
-3. **Run through**: [`docs/AlohaMini_Walkthrough.ipynb`](docs/AlohaMini_Walkthrough.ipynb)
+1. First, build the Docker image at `sudo ./docker/build.sh`. This entire environment - whether it's running on your laptop, the Jetson, or a remote server, will use the associated container.
+2. Start the container through `sudo ./docker/run.sh`, or join (create a new shell for) an existing instance with `sudo ./docker/join.sh`. 
+3. **Explore documentation & codebase:**
+   * Familiarize yourself with the overall robot by rading through [`docs/STARTUP_GUIDE.md`](docs/STARTUP_GUIDE.md), [`docs/ALOHAMINI_ARCHITECTURE.md`](docs/ALOHAMINI_ARCHITECTURE.md), and [`docs/ALOHAMINI_CAPABILITIES_REPORT.md`](docs/ALOHAMINI_CAPABILITIES_REPORT.md)
+      * *Note: all documentation assumes you're working from the **container**, and will NOT work otherwise!
+   * If helpful, try this interactive tutorial at [`docs/AlohaMini_Walkthrough.ipynb`](docs/AlohaMini_Walkthrough.ipynb)
    Interactive tutorial walking through the codebase
-
-4. **Understand capabilities**: [`docs/ALOHAMINI_CAPABILITIES_REPORT.md`](docs/ALOHAMINI_CAPABILITIES_REPORT.md)
-   Current implementation status and future opportunities
-
-### For Hardware Deployment
-- **Follow**: [`docs/DEPLOYMENT_GUIDE.md`](docs/DEPLOYMENT_GUIDE.md)
-  Complete guide for deploying to Raspberry Pi/Jetson hardware
-
-## Path References
-
-All documentation assumes you're working from the **Docker container** where:
-- Project root is mounted at: `/workspace/`
-- Documentation is at: `/workspace/docs/`
-- Source code is at: `/workspace/lerobot_alohamini/`
+   * Read any & all research material available in our [shared Google Drive](https://drive.google.com/drive/folders/1nRqpTXZkhCgcrnd-XB8d54YkAPep3cdM)
 
 ## Troubleshooting
 
-See the troubleshooting sections in:
-- [`docs/STARTUP_GUIDE.md`](docs/STARTUP_GUIDE.md#troubleshooting) - Docker issues
-- [`docs/DEPLOYMENT_GUIDE.md`](docs/DEPLOYMENT_GUIDE.md#troubleshooting) - Hardware issues
+See the following docs:
+* [`docs/STARTUP_GUIDE.md`](docs/STARTUP_GUIDE.md#troubleshooting) - Docker issues
+* [`docs/DEPLOYMENT_GUIDE.md`](docs/DEPLOYMENT_GUIDE.md#troubleshooting) - Hardware issues
 
-## Additional Resources
 
-- **LeRobot Documentation**: https://huggingface.co/docs/lerobot
-- **Docker Documentation**: https://docs.docker.com/
+## AlohaMini Startup
+
+To operate the physical robot, do the following **IN THE CONTAINER ON THE JETSON**:
+1. Start the host server ``
+*Reminder: **YOU** are the **CLIENT** and the **ROBOT** is the **HOST.***
+
+
+
+## Teleop Setup
+
+![alohamini teleop setup](./media/teleop_setup.jpg)
+
+Step by step:
+1. Gather the **leader arms**, **two clamps *each***, two USB-C -> USB-C cables, and two **5V adapters** (one per arm).
+2. Set up according to the image above, noting that the leader arm with the **green** label is on the **left** and that with the **red** label is on the **right**. Connect the SCServo controller board on the back of each leader arm to 5V power, and separately through USB to your local machine.
+3. Expose leader arm USB ports to Docker (varies by device, necessary since docker tries to isolate from the system):
+   * **Windows:** if using Docker w/ WSL2 (recommended), install some tool such as (usbipd)[https://github.com/dorssel/usbipd-win] that can attach COM ports to WSL. In our experience, the devices typically appear as `/dev/ttyACM0` and `/dev/ttyACM1`.
+   * **Linux & MacOS:** should appear normally and be detected...? TODO: verify this
+4. Enter the Docker container on your **local machine**, and *inside* run `./wiscohumanoid/scripts/teleop.sh` (use `--help` to see all options).

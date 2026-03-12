@@ -1,6 +1,6 @@
 ## Wiscohumanoids AlohaMini
 
-Please refer to **[our Wiscohumanoid-specific readme](./wiscohumanoid/README.md)** for detailed setup instructions.
+**[!!] IMPORTANT:** Please refer to **[our Wiscohumanoid-specific readme](./wiscohumanoid/README.md)** for detailed setup / general use instructions.
 
 ![alohamini concept](examples/alohamini/media/alohamini3a.png)  
 
