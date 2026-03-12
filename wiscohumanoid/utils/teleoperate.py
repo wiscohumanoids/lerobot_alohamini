@@ -19,7 +19,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--no_robot", action="store_true", help="Do not connect robot, only print actions")
 parser.add_argument("--no_leader", action="store_true", help="Do not connect leader arm, only perform keyboard-controlled actions.")
 parser.add_argument("--fps", type=int, default=30, help="Main loop frequency (frames per second)")
-parser.add_argument("--remote_ip", type=str, default="127.0.0.1", help="LeKiwi host IP address")
+parser.add_argument("--remote_ip", type=str, default="10.139.152.187", help="LeKiwi host IP address")
 parser.add_argument("--leader_id", type=str, default="so101_leader_bi", help="Leader arm device ID")
 parser.add_argument(
     "--arm_profile",

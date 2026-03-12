@@ -5,13 +5,14 @@ This directory contains the Docker environment and documentation for getting sta
 ## Directory Structure
 
 ```
-wiscohumanoid/
-├── docker/              # Docker build & run scripts
-│   ├── Dockerfile       # Container image definition
-│   ├── build.sh         # Build the Docker image
-│   ├── run.sh           # Run the container
-│   └── requirements-ubuntu.txt  # Python dependencies
+wiscohumanoid/           # folder for wiscohumanoids-specific work
+├── docker/              # docker container setup
+│   ├── Dockerfile       # container image definition
+│   ├── build.sh         # script to BUILD the docker image (generally a one-time thing)
+│   ├── build.sh         # script to JOIN an already running container (create a new shell/terminal in that container instance)
+│   └── run.sh           # script to RUN the container (do this on startup)
 │
+
 └── docs/                # Documentation & guides
     ├── STARTUP_GUIDE.md              # Start here! Quick setup guide
     ├── ALOHAMINI_ARCHITECTURE.md     # Complete system architecture
