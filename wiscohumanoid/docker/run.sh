@@ -63,19 +63,24 @@ DOCKER_ARGS=(
     -v "/tmp/.X11-unix:/tmp/.X11-unix"
     -e "DISPLAY=${DISPLAY}"
     -e "PYTHONPATH=/workspace/src"
-    -v $XSOCK:$XSOCK \
-    -v $XAUTH:$XAUTH \
-    -e XAUTHORITY=$XAUTH \
-    -e XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR \
-    -v $XDG_RUNTIME_DIR:$XDG_RUNTIME_DIR \
-    -e NVIDIA_DRIVER_CAPABILITIES=all \
-    --runtime=nvidia \
-    --privileged \
-    -v /dev/bus/usb:/dev/bus/usb \
+    -v "$XSOCK:$XSOCK"
+    -v "$XAUTH:$XAUTH"
+    -e "XAUTHORITY=$XAUTH"
+    -e "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR"
+    -v "$XDG_RUNTIME_DIR:$XDG_RUNTIME_DIR"
+    --privileged
+    -v /dev/bus/usb:/dev/bus/usb
     -v ../leader_calibration/leader:/root/.cache/huggingface/lerobot/calibration/teleoperators/so_leader
     -v ../leader_calibration/robot:/root/.cache/huggingface/lerobot/calibration/robots/lekiwi
-    --gpus all
 )
+
+if command -v nvidia-smi &> /dev/null && nvidia-smi -L &> /dev/null; then
+    DOCKER_ARGS+=(
+        --runtime=nvidia
+        --gpus all
+        -e NVIDIA_DRIVER_CAPABILITIES=all
+    )
+fi
 
 # Add device passthrough if devices exist (for hardware deployment)
 if [ -d "/dev" ]; then

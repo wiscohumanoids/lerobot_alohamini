@@ -27,7 +27,7 @@ lerobot_alohamini/
 2. Start the container through `sudo ./docker/run.sh`, or join (create a new shell for) an existing instance with `sudo ./docker/join.sh`. 
 3. **Explore documentation & codebase:**
    * Familiarize yourself with the overall robot by rading through [`docs/STARTUP_GUIDE.md`](docs/STARTUP_GUIDE.md), [`docs/ALOHAMINI_ARCHITECTURE.md`](docs/ALOHAMINI_ARCHITECTURE.md), and [`docs/ALOHAMINI_CAPABILITIES_REPORT.md`](docs/ALOHAMINI_CAPABILITIES_REPORT.md)
-      * *Note: all documentation assumes you're working from the **container**, and will NOT work otherwise!
+      * *Note: all documentation assumes you're working from the **container**, and will NOT function easily otherwise!*
    * If helpful, try this interactive tutorial at [`docs/AlohaMini_Walkthrough.ipynb`](docs/AlohaMini_Walkthrough.ipynb)
    Interactive tutorial walking through the codebase
    * Read any & all research material available in our [shared Google Drive](https://drive.google.com/drive/folders/1nRqpTXZkhCgcrnd-XB8d54YkAPep3cdM)
@@ -42,10 +42,9 @@ See the following docs:
 ## AlohaMini Startup
 
 To operate the physical robot, do the following **IN THE CONTAINER ON THE JETSON**:
-1. Start the host server ``
+1. Start the host server using `./scripts/host.sh`
+
 *Reminder: **YOU** are the **CLIENT** and the **ROBOT** is the **HOST.***
-
-
 
 ## Teleop Setup
 
@@ -57,4 +56,4 @@ Step by step:
 3. Expose leader arm USB ports to Docker (varies by device, necessary since docker tries to isolate from the system):
    * **Windows:** if using Docker w/ WSL2 (recommended), install some tool such as (usbipd)[https://github.com/dorssel/usbipd-win] that can attach COM ports to WSL. In our experience, the devices typically appear as `/dev/ttyACM0` and `/dev/ttyACM1`.
    * **Linux & MacOS:** should appear normally and be detected...? TODO: verify this
-4. Enter the Docker container on your **local machine**, and *inside* run `./wiscohumanoid/scripts/teleop.sh` (use `--help` to see all options).
+4. Enter the Docker container on your **local machine**, and *inside* run `./scripts/teleop.sh` (use `--help` to see all options).
