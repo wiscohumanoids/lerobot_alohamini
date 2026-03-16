@@ -94,9 +94,6 @@ WORKDIR /workspace/lerobot_alohamini
 
 # Copy repository contents
 COPY src/ /workspace/lerobot_alohamini/src/
-COPY examples/ /workspace/lerobot_alohamini/examples/
-COPY pyproject.toml setup.py MANIFEST.in README.md /workspace/lerobot_alohamini/
-COPY requirements-ubuntu.txt /workspace/
 
 # Install Python dependencies
 # Install lerobot in editable mode and let pip resolve dependencies
@@ -132,10 +129,7 @@ ENV PYTHONPATH=/workspace/lerobot_alohamini:$PYTHONPATH
 RUN mkdir -p /workspace/data /workspace/logs /workspace/outputs
 
 # Copy wiscohumanoid documentation to workspace for easy access
-COPY wiscohumanoid/docs/ /workspace/docs/
-
-# Copy example notebooks from lerobot to workspace root
-RUN cp /workspace/lerobot_alohamini/examples/alohamini/*.ipynb /workspace/ 2>/dev/null || true
+COPY wiscohumanoid/setup_docs/ /workspace/setup_docs/
 
 # Set default command to bash
 CMD ["/bin/bash"]
