@@ -74,6 +74,8 @@ RUN apt-get update && apt-get install -y \
     # X server suport 
     libxkbcommon-x11-0 \
     libxcb-xinerama0 \
+    lsof\
+    net-tools\
     libx11-6 \
     vulkan-tools \
     && rm -rf /var/lib/apt/lists/*
@@ -90,13 +92,17 @@ RUN pip install --no-cache-dir \
     "hf-egl-probe @ git+https://github.com/huggingface/egl_probe.git"
 
 # Set working directory
-WORKDIR /workspace/lerobot_alohamini
+WORKDIR /workspace/lerobot_alohamini/
+COPY ../.old-misc/pyproject.toml \ 
+    ../.old-misc/setup.py \
+    ../.old-misc/MANIFEST.in \
+    README.md .
 
 # Copy repository contents
-COPY src/ /workspace/lerobot_alohamini/src/
-COPY examples/ /workspace/lerobot_alohamini/examples/
-COPY pyproject.toml setup.py MANIFEST.in README.md /workspace/lerobot_alohamini/
-COPY requirements-ubuntu.txt /workspace/
+COPY ../src/ src/
+
+# Copy wiscohumanoid documentation to workspace for easy access
+COPY setup_docs/ docs/
 
 # Install Python dependencies
 # Install lerobot in editable mode and let pip resolve dependencies
@@ -130,9 +136,6 @@ ENV PYTHONPATH=/workspace/lerobot_alohamini:$PYTHONPATH
 
 # Create directories for data and logs
 RUN mkdir -p /workspace/data /workspace/logs /workspace/outputs
-
-# Copy wiscohumanoid documentation to workspace for easy access
-COPY wiscohumanoid/docs/ /workspace/docs/
 
 # Copy example notebooks from lerobot to workspace root
 RUN cp /workspace/lerobot_alohamini/examples/alohamini/*.ipynb /workspace/ 2>/dev/null || true
