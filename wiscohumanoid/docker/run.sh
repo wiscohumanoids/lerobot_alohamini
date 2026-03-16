@@ -82,6 +82,12 @@ if command -v nvidia-smi &> /dev/null && nvidia-smi -L &> /dev/null; then
     )
 fi
 
+if [[ "$OSTYPE" == "darwin"* || "$OSTYPE" == "linux-gnu"* ]]; then
+    DOCKER_ARGS+=(
+        --pid=host
+    )
+fi
+
 # Add device passthrough if devices exist (for hardware deployment)
 if [ -d "/dev" ]; then
     # USB serial devices (motor controllers)
