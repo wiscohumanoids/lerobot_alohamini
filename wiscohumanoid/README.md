@@ -26,17 +26,17 @@ lerobot_alohamini/
 1. First, build the Docker image at `sudo ./docker/build.sh`. This entire environment - whether it's running on your laptop, the Jetson, or a remote server, will use the associated container.
 2. Start the container through `sudo ./docker/run.sh`, or join (create a new shell for) an existing instance with `sudo ./docker/join.sh`. 
 3. **Explore documentation & codebase:**
-   * Familiarize yourself with the overall robot by rading through [`docs/STARTUP_GUIDE.md`](docs/STARTUP_GUIDE.md), [`docs/ALOHAMINI_ARCHITECTURE.md`](docs/ALOHAMINI_ARCHITECTURE.md), and [`docs/ALOHAMINI_CAPABILITIES_REPORT.md`](docs/ALOHAMINI_CAPABILITIES_REPORT.md)
+   * Familiarize yourself with the overall robot by rading through [`setup_docs/STARTUP_GUIDE.md`](setup_docs/STARTUP_GUIDE.md), [`setup_docs/ALOHAMINI_ARCHITECTURE.md`](setup_docs/ALOHAMINI_ARCHITECTURE.md), and [`setup_docs/ALOHAMINI_CAPABILITIES_REPORT.md`](setup_docs/ALOHAMINI_CAPABILITIES_REPORT.md)
       * *Note: all documentation assumes you're working from the **container**, and will NOT function easily otherwise!*
-   * If helpful, try this interactive tutorial at [`docs/AlohaMini_Walkthrough.ipynb`](docs/AlohaMini_Walkthrough.ipynb)
+   * If helpful, try this interactive tutorial at [`setup_docs/AlohaMini_Walkthrough.ipynb`](setup_docs/AlohaMini_Walkthrough.ipynb)
    Interactive tutorial walking through the codebase
    * Read any & all research material available in our [shared Google Drive](https://drive.google.com/drive/folders/1nRqpTXZkhCgcrnd-XB8d54YkAPep3cdM)
 
 ## Troubleshooting
 
 See the following docs:
-* [`docs/STARTUP_GUIDE.md`](docs/STARTUP_GUIDE.md#troubleshooting) - Docker issues
-* [`docs/DEPLOYMENT_GUIDE.md`](docs/DEPLOYMENT_GUIDE.md#troubleshooting) - Hardware issues
+* [`setup_docs/STARTUP_GUIDE.md`](setup_docs/STARTUP_GUIDE.md#troubleshooting) - Docker issues
+* [`setup_docs/DEPLOYMENT_GUIDE.md`](setup_docs/DEPLOYMENT_GUIDE.md#troubleshooting) - Hardware issues
 
 
 ## AlohaMini Startup
