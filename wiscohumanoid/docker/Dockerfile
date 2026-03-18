@@ -93,6 +93,7 @@ RUN pip install --no-cache-dir \
 
 # Set working directory
 WORKDIR /workspace/lerobot_alohamini/
+
 COPY ../.old-misc/pyproject.toml \ 
     ../.old-misc/setup.py \
     ../.old-misc/MANIFEST.in \
