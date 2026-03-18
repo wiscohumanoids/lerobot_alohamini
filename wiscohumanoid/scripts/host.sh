@@ -27,11 +27,7 @@ main() {
     fi
 
     log "Server starting"
-    if [[ "$VERBOSE" == true ]]; then
-        python -m lerobot.robots.alohamini.lekiwi_host --verbose
-    else
-        python -m lerobot.robots.alohamini.lekiwi_host
-    fi
+    python -m lerobot.robots.alohamini.lekiwi_host
 }
 
 main
