@@ -24,7 +24,7 @@ lerobot_alohamini/
 ## Setup & Onboarding
 
 1. First, build the Docker image at `sudo ./docker/build.sh`. This entire environment - whether it's running on your laptop, the Jetson, or a remote server, will use the associated container.
-2. Start the container through `sudo ./docker/run.sh`, or join (create a new shell for) an existing instance with `sudo ./docker/join.sh`. 
+2. Start the container through `cd docker` followed by `sudo run.sh`, or join (create a new shell for) an existing instance with `sudo ./docker/join.sh`. 
 3. **Explore documentation & codebase:**
    * Familiarize yourself with the overall robot by rading through [`setup_docs/STARTUP_GUIDE.md`](setup_docs/STARTUP_GUIDE.md), [`setup_docs/ALOHAMINI_ARCHITECTURE.md`](setup_docs/ALOHAMINI_ARCHITECTURE.md), and [`setup_docs/ALOHAMINI_CAPABILITIES_REPORT.md`](setup_docs/ALOHAMINI_CAPABILITIES_REPORT.md)
       * *Note: all documentation assumes you're working from the **container**, and will NOT function easily otherwise!*
