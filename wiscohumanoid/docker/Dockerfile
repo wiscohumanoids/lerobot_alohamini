@@ -94,14 +94,14 @@ RUN pip install --no-cache-dir \
 # Set working directory
 WORKDIR /workspace/lerobot_alohamini/
 
-COPY ../.old-misc/pyproject.toml \ 
-    ../.old-misc/setup.py \
-    ../.old-misc/MANIFEST.in \
-    README.md .
+# copies files into directory
+COPY pyproject.toml setup.py MANIFEST.in README.md .
 
 # Copy repository contents
-COPY ../src/ ./src/
-COPY setup_docs/ ./setup_docs/
+COPY ./src/ ./src/
+
+# Copies docs into directory
+COPY wiscohumanoid/setup_docs/ ./setup_docs/
 
 # Install Python dependencies
 # Install lerobot in editable mode and let pip resolve dependencies
