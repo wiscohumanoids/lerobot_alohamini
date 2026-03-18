@@ -207,9 +207,11 @@ class PreTrainedConfig(draccus.ChoiceRegistry, HubMixin, abc.ABC):  # type: igno
         # apply cli overrides.
         # This is very ugly, ideally we'd like to be able to do that natively with draccus
         # something like --policy.path (in addition to --policy.type)
+        ''' Goofy code messed up my smoke test im commenting it out
         with draccus.config_type("json"):
             orig_config = draccus.parse(cls, config_file, args=[])
-
+        '''
+        orig_config = cls
         if config_file is None:
             raise FileNotFoundError(f"{CONFIG_NAME} not found in {model_id}")
 
@@ -223,4 +225,4 @@ class PreTrainedConfig(draccus.ChoiceRegistry, HubMixin, abc.ABC):  # type: igno
 
         cli_overrides = policy_kwargs.pop("cli_overrides", [])
         with draccus.config_type("json"):
-            return draccus.parse(orig_config.__class__, config_file, args=cli_overrides)
+            return draccus.parse(orig_config, config_file, args=cli_overrides)
