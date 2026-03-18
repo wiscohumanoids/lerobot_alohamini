@@ -1,4 +1,3 @@
-@@ -1,134 +1,135 @@
 # AlohaMini Development Container
 # Ubuntu 22.04 + Python 3.10 + LeRobot dependencies
 # Allows safe exploration of codebase without physical hardware
