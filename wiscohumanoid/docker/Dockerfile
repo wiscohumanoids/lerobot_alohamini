@@ -94,6 +94,7 @@ WORKDIR /workspace/lerobot_alohamini
 
 # Copy repository contents
 COPY src/ /workspace/lerobot_alohamini/src/
+COPY pyproject.toml setup.py MANIFEST.in README.md /workspace/lerobot_alohamini/
 
 # Install Python dependencies
 # Install lerobot in editable mode and let pip resolve dependencies
