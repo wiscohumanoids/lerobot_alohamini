@@ -101,6 +101,7 @@ COPY ../.old-misc/pyproject.toml \
 
 # Copy repository contents
 COPY ../src/ ./src/
+COPY setup_docs/ ./setup_docs/
 
 # Install Python dependencies
 # Install lerobot in editable mode and let pip resolve dependencies
@@ -134,9 +135,6 @@ ENV PYTHONPATH=/workspace/lerobot_alohamini:$PYTHONPATH
 
 # Create directories for data and logs
 RUN mkdir -p /workspace/data /workspace/logs /workspace/outputs
-
-# Copy wiscohumanoid documentation to workspace for easy access
-COPY wiscohumanoid/setup_docs/ ./docs/
 
 # Copy example notebooks from lerobot to workspace root
 RUN cp /workspace/lerobot_alohamini/examples/alohamini/*.ipynb /workspace/ 2>/dev/null || true
