@@ -5,7 +5,7 @@ readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #readonly LOG_FILE="/tmp/$(basename "$0").log"
 
 log() {
-    echo "[$(date +'%Y-%m-%d @ %H:%M:%S%z')] : $*" #| tee -a "$LOG_FILE"
+    echo "[$(date +'%Y-%m-%d @ %H:%M:%S%z')]: $*" #| tee -a "$LOG_FILE"
 }
 
 VERBOSE=false
