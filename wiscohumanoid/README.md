@@ -55,5 +55,32 @@ Step by step:
 2. Set up according to the image above, noting that the leader arm with the **green** label is on the **left** and that with the **red** label is on the **right**. Connect the SCServo controller board on the back of each leader arm to 5V power, and separately through USB to your local machine.
 3. Expose leader arm USB ports to Docker (varies by device, necessary since docker tries to isolate from the system):
    * **Windows:** if using Docker w/ WSL2 (recommended), install some tool such as [usbipd](https://github.com/dorssel/usbipd-win) that can attach COM ports to WSL. In our experience, the devices typically appear as `/dev/ttyACM0` and `/dev/ttyACM1`.
-   * **Linux & MacOS:** should appear normally and be detected...? TODO: verify this
+   * **Linux & MacOS:**
+   * Open a new terminal window:
+     ```
+     git clone https://github.com/jiegec/usbip
+     cd usbip
+     env RUST_LOG=info cargo run --example host
+     ```
+    * Open a new terminal window:
+    * join the docker `sudo run.sh`
+    ```
+     nsenter -t 1 -m
+     usbip list -r host.docker.internal
+     ```
+    * You get:
+    ```
+    Exportable USB devices
+    ======================
+     - host.docker.internal
+          0-0-0: unknown vendor : unknown product (0000:0000)
+               : /sys/bus/0/0/0
+               : (Defined at Interface level) (00/00/00)
+               :  0 - unknown class / unknown subclass / unknown protocol (03/00/00)
+    ```
+    * attach every number ex:
+    ```
+    usbip attach -r host.docker.internal -d 0-0-0
+    ```
+    * ls /dev and check for ttyACM0 and ttyACM1
 4. Enter the Docker container on your **local machine**, and *inside* run `./scripts/teleop.sh` (use `--help` to see all options).
