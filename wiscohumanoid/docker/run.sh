@@ -70,8 +70,8 @@ DOCKER_ARGS=(
     -v "$XDG_RUNTIME_DIR:$XDG_RUNTIME_DIR"
     --privileged
     -v /dev/bus/usb:/dev/bus/usb
-    -v ../calibration/leader:/root/.cache/huggingface/lerobot/calibration/teleoperators/so_leader
-    -v ../calibration/robot:/root/.cache/huggingface/lerobot/calibration/robots/lekiwi
+    -v "${SCRIPT_DIR}/../calibration/leader:/root/.cache/huggingface/lerobot/calibration/teleoperators/so_leader"
+    -v "${SCRIPT_DIR}/../calibration/robot:/root/.cache/huggingface/lerobot/calibration/robots/lekiwi"
 )
 
 if command -v nvidia-smi &> /dev/null && nvidia-smi -L &> /dev/null; then
