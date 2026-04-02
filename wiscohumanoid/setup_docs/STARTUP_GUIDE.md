@@ -38,11 +38,11 @@ This guide helps new team members get up and running with the AlohaMini codebase
 ```bash
 # Clone the AlohaMini repository
 git clone https://github.com/wiscohumanoids/lerobot_alohamini.git
-cd alohamini
+cd lerobot_alohamini
 
 # Checkout to our club's branch
 git checkout wiscohumanoids
-cd wiscohumanoids
+cd wiscohumanoid
 ```
 
 ### Step 2: Build Docker Image
