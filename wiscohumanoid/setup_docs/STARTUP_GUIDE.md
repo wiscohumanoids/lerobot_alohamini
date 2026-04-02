@@ -70,7 +70,7 @@ bash docker/build.sh
 
 # Run container
 docker/run.sh
-cd wiscohumanoids
+cd wiscohumanoid
 ```
 
 **Windows users**:
