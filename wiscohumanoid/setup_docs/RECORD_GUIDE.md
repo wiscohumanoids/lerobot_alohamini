@@ -4,7 +4,7 @@
 
 Connect to the Jetson through the USB-C cable, EtherNet, or Wi-Fi first. After that, on your terminal type `ssh badger@192.168.55.1`. `ssh` is how we're communicating securely with the Jetson. `badger` is the username on the Jetson Nano device. `192.168.55.1` is the remote ip of the Jetson (you still need it even connecting to it physically). (The password is also 'badger')
 
-After that navigate into `lerobot_alohamini/wiscohumanoid` and then run `docker/run.sh` to enable docker. After that, you can start the `lekiwi_host.py` on the Jetson with `python3 -m src.lerobot.robots.alohamini.lekiwi_host`.
+After that navigate into `lerobot_alohamini/wiscohumanoid` and then run `docker/run.sh` to enable docker. After that, you can start the `lekiwi_host.py` on the Jetson with `python3 -m src.lerobot.robots.alohamini.lekiwi_host`. If not use docker, simply go into `lerobot_alohamini` and enable the virtual environment with `source lerobot_venv/bin/activate`.
 
 A couple things to notice: make sure to configure the video ports correctly in the `config_lekiwi.py` to enable only the video ports you want for recording. Also, make sure to configure the usb ports connected to the motor controller boards correctly.
 
