@@ -16,6 +16,8 @@ On your Macbook, make sure you have cloned the entire repository in [https://git
 
 ### Extra info
 
+You might have to exit the docker container and reenter again on the Jetson if it's not able to identify the ports.
+
 The /dev/videoX numbers are assigned by the Linux kernel based on USB enumeration order — whichever camera the kernel discovers first gets the lowest number. This order depends on:
 
 Which USB port the camera is plugged into
