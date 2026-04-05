@@ -16,6 +16,8 @@ On your Macbook, make sure you have cloned the entire repository in [https://git
 
 ### Extra info
 
+Common issue: ConnectionError: Failed to sync read 'Present_Position' on ids=[1, 2, 3, 4, 5, 6] after 4 tries. [TxRxResult] There is no status packet!
+
 You might have to exit the docker container and reenter again on the Jetson if it's not able to identify the ports.
 
 The /dev/videoX numbers are assigned by the Linux kernel based on USB enumeration order — whichever camera the kernel discovers first gets the lowest number. This order depends on:
