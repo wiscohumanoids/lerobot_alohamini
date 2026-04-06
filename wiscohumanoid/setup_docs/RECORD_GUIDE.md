@@ -26,3 +26,18 @@ Which USB port the camera is plugged into
 The hub's internal port numbering
 Boot timing / driver probe order
 That's why they shift around on reboot, and why we switched to /dev/v4l/by-path/ symlinks — those are based on the physical USB port topology (e.g., platform-3610000.usb-usb-0:2.3.1:1.0) which is stable.
+
+If it mentions something like the error message below. Simple turn of the battery and turn it on again.
+
+```
+RuntimeError: FeetechMotorsBus motor check failed on port '/dev/ttyACM1':
+
+Missing motor IDs:
+  - 11 (expected model: 777)
+
+Full expected motor list (id: model_number):
+{1: 777, 2: 777, 3: 777, 4: 777, 5: 777, 6: 777, 11: 777}
+
+Full found motor list (id: model_number):
+{1: 777, 2: 777, 3: 777, 4: 777, 5: 777, 6: 777}
+```
