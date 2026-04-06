@@ -8,19 +8,18 @@ import sys
 import tty
 
 from lerobot.robots.alohamini import LeKiwiClient, LeKiwiClientConfig
-from lerobot.teleoperators.keyboard.teleop_keyboard import KeyboardTeleop, KeyboardTeleopConfig
 from lerobot.teleoperators.bi_so_leader import BiSOLeader, BiSOLeaderConfig
 from lerobot.teleoperators.so_leader import SOLeaderConfig
 from lerobot.utils.robot_utils import precise_sleep
 from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
 
-# ============ Parameter Section ============ #
 parser = argparse.ArgumentParser()
 parser.add_argument("--no_robot", action="store_true", help="Do not connect robot, only print actions")
 parser.add_argument("--no_leader", action="store_true", help="Do not connect leader arm, only perform keyboard-controlled actions.")
 parser.add_argument("--fps", type=int, default=30, help="Main loop frequency (frames per second)")
 parser.add_argument("--remote_ip", type=str, default="10.139.152.187", help="LeKiwi host IP address")
 parser.add_argument("--leader_id", type=str, default="so101_leader_bi", help="Leader arm device ID")
+parser.add_argument("--use_rerun", action="store_true", help="Enable Rerun vis (kind of extraneous)")
 parser.add_argument(
     "--arm_profile",
     type=str,
@@ -33,14 +32,18 @@ args = parser.parse_args()
 
 NO_ROBOT = args.no_robot
 NO_LEADER = args.no_leader
+USE_RERUN = args.use_rerun
 FPS = args.fps
-# ========================================== #
 
 if NO_ROBOT:
-    print("🧪 NO_ROBOT mode enabled: robot will not connect, only print actions.")
+    print("NO_ROBOT: robot will not connect, only print actions.")
 
 if NO_LEADER:
-    print("🧪 NO_LEADER mode enabled: leader arm will not connect, only print actions.")
+    print("NO_LEADER: leader arm will not connect, only print actions.")
+
+if USE_RERUN:
+    print("USE_RERUN: Rerun visualization enabled, logging data to Rerun dashboard.")
+
 # Create configs
 robot_config = LeKiwiClientConfig(remote_ip=args.remote_ip, id="my_alohamini")
 bi_cfg = BiSOLeaderConfig(
@@ -55,46 +58,58 @@ bi_cfg = BiSOLeaderConfig(
     id=args.leader_id,
 )
 leader = BiSOLeader(bi_cfg)
-#keyboard_config = KeyboardTeleopConfig(id="my_laptop_keyboard")
-#keyboard = KeyboardTeleop(keyboard_config)
 robot = LeKiwiClient(robot_config)
 
 # Connection logic
 if not NO_ROBOT:
     robot.connect()
 else:
-    print("🧪 robot.connect() skipped, only printing actions.")
+    print("NO_ROBOT: robot will not connect, only print actions.")
 
 if not NO_LEADER:
     leader.connect()
 else:
-    print("🧪 robot.connect() skipped, only printing actions.")
+    print("NO_LEADER: leader arm will not connect, only print actions.")
 
-#keyboard.connect()
+# Keyboard control setup
+MOVE_BINDINGS = {
+    'w': ('x.vel', 0.1),
+    's': ('x.vel', -0.1),
+    'a': ('y.vel', 0.1),
+    'd': ('y.vel', -0.1),
+    'q': ('theta.vel', 8.0),
+    'e': ('theta.vel', -8.0),
+    'u': ('lift_axis.height_mm', 4.0),
+    'j': ('lift_axis.height_mm', -4.0),
+}
 
 settings = termios.tcgetattr(sys.stdin)
+key_last_received = {k: 0 for k in MOVE_BINDINGS.keys()}
+KEY_TIMEOUT = 0.2
 
-def getKey():
+# Read all available characters from stdin at once without blocking
+def get_all_keys():
+    keys = []
     tty.setraw(sys.stdin.fileno())
-    rlist, _, _ = select.select([sys.stdin], [], [], 0.1)
-    if rlist:
-        key = sys.stdin.read(1)
-    else:
-        key = ''
+    while True:
+        # Check if there is data in stdin (0.0 timeout = non-blocking)
+        rlist, _, _ = select.select([sys.stdin], [], [], 0.01)
+        if rlist:
+            keys.append(sys.stdin.read(1))
+#            print("DEBUG ---- read something!")
+        else:
+            break
     termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
-    return key
+    return keys
 
 def limit(val, min_val, max_val):
     return max(min(val, max_val), min_val)
 
-
-init_rerun(session_name="lekiwi_teleop")
-
-#if not robot.is_connected or not leader.is_connected or not keyboard.is_connected:
-#    print("⚠️ Warning: Some devices are not connected! Still running for debug.")
+if USE_RERUN:
+    init_rerun(session_name="lekiwi_teleop")
 
 # Main loop
-debug = {
+action = {
     "lift_axis.height_mm": 300.0,
     "x.vel": 0.0,
     "y.vel": 0.0,
@@ -107,34 +122,40 @@ while True:
     observation = robot.get_observation() if not NO_ROBOT else {}
     arm_actions = leader.get_action() if not NO_LEADER else {}
     arm_actions = {f"arm_{k}": v for k, v in arm_actions.items()}
-    #keyboard_keys = keyboard.get_action()
-    #base_action = robot._from_keyboard_to_base_action(keyboard_keys)
-    #lift_action = robot._from_keyboard_to_lift_action(keyboard_keys)
 
-    MOVE_BINDINGS = {
-        'w': ('x.vel', 0.1),
-        's': ('x.vel', -0.1),
-        'a': ('y.vel', 0.1),
-        'd': ('y.vel', -0.1),
-        'q': ('theta.vel', 8.0),
-        'e': ('theta.vel', -8.0),
-        'u': ('lift_axis.height_mm', 4.0),
-        'j': ('lift_axis.height_mm', -4.0),
+    current_time = time.time()
+    keys_pressed = get_all_keys()
+
+    for k in keys_pressed:
+        if k in key_last_received:
+            key_last_received[k] = current_time
+        if k == '\x1b': # escape for exit
+            sys.exit(0)
+
+    current_action = {
+        "x.vel": 0.0,
+        "y.vel": 0.0,
+        "theta.vel": 0.0,
+        "lift_axis.height_mm": action["lift_axis.height_mm"] 
     }
 
-    debug["x.vel"] = 0.0
-    debug["y.vel"] = 0.0
-    debug["theta.vel"] = 0.0
+    for k in MOVE_BINDINGS.keys():
+        if k in key_last_received and current_time - key_last_received[k] < KEY_TIMEOUT:
+            attr, val = MOVE_BINDINGS[k]
+            current_action[attr] += val
 
-    key = getKey()
-    if key != 'k' and key in MOVE_BINDINGS:
-        attr, val = MOVE_BINDINGS[key]
-        debug[attr] += val
-            
+    current_action["lift_axis.height_mm"] = limit(current_action["lift_axis.height_mm"], 0.0, 600.0)
 
-    action = {**arm_actions, **debug}
+    SPACE = ' '
+    if SPACE in keys_pressed:
+        current_action["x.vel"] = 0.0
+        current_action["y.vel"] = 0.0
+        current_action["theta.vel"] = 0.0
+
+    action = {**arm_actions, **current_action}
     #action = {**arm_actions, **base_action, **lift_action}
-    log_rerun_data(observation, action)
+    if USE_RERUN:
+        log_rerun_data(observation, action)
 
     if not NO_ROBOT:
         robot.send_action(action)
