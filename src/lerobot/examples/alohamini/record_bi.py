@@ -157,13 +157,23 @@ def main():
 
     print("Starting record loop...")
 
-    # Initial setup countdown
+    # Initial setup countdown with live camera preview
+    display_data = not args.disable_rerun
     log_say(f"Setup time: {args.setup_time} seconds to get ready")
     for remaining in range(args.setup_time, 0, -1):
         if events["stop_recording"]:
             break
         print(f"\rStarting in {remaining}s... ", end="", flush=True)
-        time.sleep(1)
+        deadline = time.perf_counter() + 1.0
+        while time.perf_counter() < deadline:
+            loop_start = time.perf_counter()
+            if display_data:
+                observation = robot.get_observation()
+                observation_processed = robot_observation_processor(observation)
+                log_rerun_data(observation=observation_processed, action=None)
+            dt_s = time.perf_counter() - loop_start
+            sleep_s = max(1.0 / args.fps - dt_s, 0.0)
+            time.sleep(sleep_s)
     print()
 
     recorded_episodes = 0
