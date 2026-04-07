@@ -102,45 +102,18 @@ class LiftAxis:
     def home(self, use_current: bool = True) -> None:
         if not self.enabled: return
         self.configure()
-        name = self.cfg.name
-        # Move downward
-        v_down = self.cfg.home_down_speed 
-        self._bus.write("Goal_Velocity", name, v_down)
-        stuck = 0
-        last_tick = int(self._bus.read("Present_Position", name, normalize=False))
-        for _ in range(600):  # ~30s @50ms
-            time.sleep(0.05)
-            self._update_extended_ticks()
-            now_tick = self._last_tick
-            moved = abs(now_tick - last_tick) > 10
-            last_tick = now_tick
-            cur_ma = 0
-            raw_cur_ma = 0
-            if use_current:
-                try: 
-                    raw_cur_ma = int(self._bus.read("Present_Current", name, normalize=False))
-                    cur_ma = raw_cur_ma * 6.5
-                    print(f"[lift_axis.home] Present_Current={cur_ma} mA")  # debug
-                    print(f"[lift_axis.home] Present_Position={now_tick} ticks")  # debug
-
-                except Exception: cur_ma = 0
-            if (use_current and cur_ma >= self.cfg.home_stall_current_ma) or (not moved):
-                print(f"[lift_axis.home] Stalled at current={cur_ma} mA, moved={moved}")  # debug
-                stuck += 1
-            else:
-                stuck = 0
-            if stuck >= 2: break
-        #self._bus.write("Goal_Velocity", name, 0)
-        self._bus.write("Torque_Enable", name, 0)
-        print("Disable torque output (motor will be released)")
-        time.sleep(1)
-
+        
+        print("[lift_axis.home] Homing plunge bypassed. Assuming current position is 0mm.")
+        
+        # 1. Read exactly where the motor is right now
         self._update_extended_ticks()
-        self._z0_deg = self._extended_deg()       
+        
+        # 2. Declare this exact spot as the zero reference
+        self._z0_deg = self._extended_deg()      
+        
         print("Extended ticks after homing:", self._extended_ticks)
         h_now = self.get_height_mm()
-        print(f"[home] set-zero z0_deg={self._z0_deg:.2f}, height_now={h_now:.2f} mm")  # should be ~0 here
-
+        print(f"[home] set-zero z0_deg={self._z0_deg:.2f}, height_now={h_now:.2f} mm")
 
 
     # Lightweight coupling with action/obs
