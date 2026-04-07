@@ -233,9 +233,29 @@ class OpenCVCamera(Camera):
 
         success = self.videocapture.set(cv2.CAP_PROP_FPS, float(self.fps))
         actual_fps = self.videocapture.get(cv2.CAP_PROP_FPS)
-        # Use math.isclose for robust float comparison
-        if not success or not math.isclose(self.fps, actual_fps, rel_tol=1e-3):
-            raise RuntimeError(f"{self} failed to set fps={self.fps} ({actual_fps=}).")
+        # NOTE: Some V4L2 drivers (common on Jetson) may:
+        #   1) return set(...)=False even when FPS is applied, or
+        #   2) report a nearby supported FPS (e.g., 29.97 for requested 30).
+        # Treat close values as valid and continue with warnings instead of crashing.
+        if actual_fps <= 0:
+            logger.warning(
+                f"{self} returned non-positive FPS from driver after setting ({self.fps=}, {actual_fps=}, {success=}). "
+                "Continuing with requested FPS."
+            )
+            return
+
+        if not math.isclose(self.fps, actual_fps, rel_tol=0.05, abs_tol=1.0):
+            logger.warning(
+                f"{self} could not apply requested FPS exactly ({self.fps=}, {actual_fps=}, {success=}). "
+                f"Using camera-reported FPS={actual_fps:.3f}."
+            )
+            self.fps = actual_fps
+            return
+
+        if not success:
+            logger.warning(
+                f"{self} reported fps set() failure but value was applied ({self.fps=}, {actual_fps=})."
+            )
 
     def _validate_fourcc(self) -> None:
         """Validates and sets the camera's FOURCC code."""
@@ -270,17 +290,43 @@ class OpenCVCamera(Camera):
         width_success = self.videocapture.set(cv2.CAP_PROP_FRAME_WIDTH, float(self.capture_width))
         height_success = self.videocapture.set(cv2.CAP_PROP_FRAME_HEIGHT, float(self.capture_height))
 
+        requested_width = self.capture_width
+        requested_height = self.capture_height
+        dimensions_overridden = False
+
         actual_width = int(round(self.videocapture.get(cv2.CAP_PROP_FRAME_WIDTH)))
-        if not width_success or self.capture_width != actual_width:
-            raise RuntimeError(
-                f"{self} failed to set capture_width={self.capture_width} ({actual_width=}, {width_success=})."
+        if requested_width != actual_width:
+            logger.warning(
+                f"{self} failed to set capture_width exactly ({requested_width=}, {actual_width=}, {width_success=}). "
+                f"Using driver-reported width={actual_width}."
+            )
+            self.capture_width = actual_width
+            dimensions_overridden = True
+        if not width_success and requested_width == actual_width:
+            logger.warning(
+                f"{self} reported width set() failure but value was applied "
+                f"({requested_width=}, {actual_width=})."
             )
 
         actual_height = int(round(self.videocapture.get(cv2.CAP_PROP_FRAME_HEIGHT)))
-        if not height_success or self.capture_height != actual_height:
-            raise RuntimeError(
-                f"{self} failed to set capture_height={self.capture_height} ({actual_height=}, {height_success=})."
+        if requested_height != actual_height:
+            logger.warning(
+                f"{self} failed to set capture_height exactly ({requested_height=}, {actual_height=}, {height_success=}). "
+                f"Using driver-reported height={actual_height}."
             )
+            self.capture_height = actual_height
+            dimensions_overridden = True
+        if not height_success and requested_height == actual_height:
+            logger.warning(
+                f"{self} reported height set() failure but value was applied "
+                f"({requested_height=}, {actual_height=})."
+            )
+
+        if dimensions_overridden:
+            if self.rotation in [cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_90_COUNTERCLOCKWISE]:
+                self.width, self.height = self.capture_height, self.capture_width
+            else:
+                self.width, self.height = self.capture_width, self.capture_height
 
     @staticmethod
     def find_cameras() -> list[dict[str, Any]]:
