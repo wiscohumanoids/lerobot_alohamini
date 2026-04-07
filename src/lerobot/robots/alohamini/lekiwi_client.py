@@ -270,10 +270,10 @@ class LeKiwiClient(Robot):
             logging.error(f"Error processing observation data, serving last observation: {e}")
             return self.last_frames, self.last_remote_state
 
-        self.last_frames = new_frames
+        self.last_frames.update(new_frames)
         self.last_remote_state = new_state
 
-        return new_frames, new_state
+        return self.last_frames, new_state
 
     @check_if_not_connected
     def get_observation(self) -> RobotObservation:
@@ -353,7 +353,7 @@ class LeKiwiClient(Robot):
         h_now = float(self.last_remote_state.get("lift_axis.height_mm", 0.0))
 
         if not now_pressed:
-            return {"lift_axis.height_mm": h_now, "lift_axis.vel": 0}
+            return {"lift_axis.height_mm": h_now}
 
         step_mm = 50.0
         if up_pressed and not dn_pressed:
