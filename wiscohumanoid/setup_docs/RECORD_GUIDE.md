@@ -41,3 +41,7 @@ Full expected motor list (id: model_number):
 Full found motor list (id: model_number):
 {1: 777, 2: 777, 3: 777, 4: 777, 5: 777, 6: 777}
 ```
+
+Useful commands:
+`ls -la /dev/v4l/by-path/`: check the usb ports for the cameras
+`ls -la /dev/v4l/by-path/`: check the usb ports for the motor boards
