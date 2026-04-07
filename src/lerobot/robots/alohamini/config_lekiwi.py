@@ -14,7 +14,7 @@
 
 from dataclasses import dataclass, field
 
-from lerobot.cameras.configs import CameraConfig, Cv2Rotation
+from lerobot.cameras.configs import CameraConfig, Cv2Backends, Cv2Rotation
 from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig
 
 from ..config import RobotConfig
@@ -22,33 +22,44 @@ from ..config import RobotConfig
 
 def lekiwi_cameras_config() -> dict[str, CameraConfig]:
     return {
-        # "head_top": OpenCVCameraConfig(
-        #     index_or_path="/dev/am_camera_head_top", fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION
-        # ),
-        # "head_back": OpenCVCameraConfig(
-        #     index_or_path="/dev/am_camera_head_back", fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION
-        # ),
-        # "head_front": OpenCVCameraConfig(
-        #     index_or_path="/dev/am_camera_head_front", fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION
-        # ),
-        # "wrist_left": OpenCVCameraConfig(
-        #     index_or_path="/dev/am_camera_wrist_left", fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION
-        # ),
-        # "wrist_right": OpenCVCameraConfig(
-        #     index_or_path="/dev/am_camera_wrist_right", fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION
-        # ),
+        "head_top": OpenCVCameraConfig(
+            index_or_path="/dev/v4l/by-path/platform-3610000.usb-usb-0:2.4.4.1:1.0-video-index0",
+            fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION,
+            backend=Cv2Backends.V4L2, fourcc="MJPG",
+        ),
+        "head_back": OpenCVCameraConfig(
+            index_or_path="/dev/v4l/by-path/platform-3610000.usb-usb-0:2.4.4.2:1.0-video-index0",
+            fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION,
+            backend=Cv2Backends.V4L2, fourcc="MJPG",
+        ),
+        "head_front": OpenCVCameraConfig(
+            index_or_path="/dev/v4l/by-path/platform-3610000.usb-usb-0:2.2:1.0-video-index0",
+            fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION,
+            backend=Cv2Backends.V4L2, fourcc="MJPG",
+        ),
+        "wrist_left": OpenCVCameraConfig(
+            index_or_path="/dev/v4l/by-path/platform-3610000.usb-usb-0:2.1:1.0-video-index0",
+            fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION,
+            backend=Cv2Backends.V4L2, fourcc="MJPG",
+        ),
+        "wrist_right": OpenCVCameraConfig(
+            index_or_path="/dev/v4l/by-path/platform-3610000.usb-usb-0:2.3:1.0-video-index0",
+            fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION,
+            backend=Cv2Backends.V4L2, fourcc="MJPG",
+        ),
     }
 
 
 @RobotConfig.register_subclass("lekiwi")
 @dataclass
 class LeKiwiConfig(RobotConfig):
-    left_port: str = "/dev/ttyACM0"  # port to connect to the bus
-    right_port: str = "/dev/ttyACM1"  # port to connect to the bus
-    base_port: str = "/dev/ttyACM2"
+    left_port: str = "/dev/serial/by-path/platform-3610000.usb-usb-0:2.4.1:1.0"  # port to connect to the bus
+    right_port: str = "/dev/serial/by-path/platform-3610000.usb-usb-0:2.4.4.3:1.0"  # port to connect to the bus
+    base_port: str = "/dev/serial/by-path/platform-3610000.usb-usb-0:2.4.2:1.0"
 
     disable_torque_on_disconnect: bool = True
     arm_profile: str = "so-arm-5dof"  # "am-arm-6dof" or "so-arm-5dof"
+    gripper_torque_limit: int = 400  # 0-1023, caps follower gripper stall torque to prevent bus brownout
 
     # `max_relative_target` limits the magnitude of the relative positional target vector for safety purposes.
     # Set this to a positive scalar to have the same value for all motors, or a list that is the same length as

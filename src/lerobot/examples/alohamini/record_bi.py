@@ -28,7 +28,7 @@ def main():
     parser.add_argument("--episode_time", type=int, default=60, help="Duration of each episode (seconds)")
     parser.add_argument("--reset_time", type=int, default=10, help="Reset duration between episodes (seconds)")
     parser.add_argument("--task_description", type=str, default="My task description4", help="Task description")
-    parser.add_argument("--remote_ip", type=str, default="127.0.0.1", help="Robot host IP")
+    parser.add_argument("--remote_ip", type=str, default="192.168.55.1", help="Robot host IP")
     parser.add_argument("--robot_id", type=str, default="lekiwi_host", help="Robot ID")
     parser.add_argument("--leader_id", type=str, default="so101_leader_bi", help="Leader arm device ID")
     parser.add_argument(
