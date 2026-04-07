@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--no_robot", action="store_true", help="Do not connect robot, only print actions")
 parser.add_argument("--no_leader", action="store_true", help="Do not connect leader arm, only perform keyboard-controlled actions.")
 parser.add_argument("--fps", type=int, default=30, help="Main loop frequency (frames per second)")
-parser.add_argument("--remote_ip", type=str, default="127.0.0.1", help="LeKiwi host IP address")
+parser.add_argument("--remote_ip", type=str, default="192.168.55.1", help="LeKiwi host IP address")
 parser.add_argument("--leader_id", type=str, default="so101_leader_bi", help="Leader arm device ID")
 parser.add_argument(
     "--arm_profile",
@@ -41,11 +41,11 @@ if NO_LEADER:
 robot_config = LeKiwiClientConfig(remote_ip=args.remote_ip, id="my_alohamini")
 bi_cfg = BiSOLeaderConfig(
     left_arm_config=SOLeaderConfig(
-        port="/dev/am_arm_leader_left",
+        port="/dev/cu.usbmodem5B140323471",  # Change this
         arm_profile=args.arm_profile,
     ),
     right_arm_config=SOLeaderConfig(
-        port="/dev/am_arm_leader_right",
+        port="/dev/cu.usbmodem5B140330511",  # Change this
         arm_profile=args.arm_profile,
     ),
     id=args.leader_id,
