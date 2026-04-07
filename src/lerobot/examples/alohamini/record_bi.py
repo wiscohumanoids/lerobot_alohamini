@@ -109,7 +109,7 @@ def main():
 
     listener, events = init_keyboard_listener()
     if not args.disable_rerun:
-        init_rerun(session_name="lekiwi_record")
+        init_rerun(session_name="lekiwi_record", ip="127.0.0.1", port=9090)
 
     if not robot.is_connected or not leader_arm.is_connected or not keyboard.is_connected:
         raise ValueError("Robot or teleop is not connected!")

@@ -27,21 +27,21 @@ def lekiwi_cameras_config() -> dict[str, CameraConfig]:
             fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION,
             backend=Cv2Backends.V4L2, fourcc="MJPG",
         ),
-        "head_back": OpenCVCameraConfig(
-            index_or_path="/dev/v4l/by-path/platform-3610000.usb-usb-0:2.4.4.2:1.0-video-index0",
-            fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION,
-            backend=Cv2Backends.V4L2, fourcc="MJPG",
-        ),
+        # "head_back": OpenCVCameraConfig(
+        #     index_or_path="/dev/v4l/by-path/platform-3610000.usb-usb-0:2.4.4.2:1.0-video-index0",
+        #     fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION,
+        #     backend=Cv2Backends.V4L2, fourcc="MJPG",
+        # ),
         "head_front": OpenCVCameraConfig(
             index_or_path="/dev/v4l/by-path/platform-3610000.usb-usb-0:2.2:1.0-video-index0",
             fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION,
             backend=Cv2Backends.V4L2, fourcc="MJPG",
         ),
-        "wrist_left": OpenCVCameraConfig(
-            index_or_path="/dev/v4l/by-path/platform-3610000.usb-usb-0:2.1:1.0-video-index0",
-            fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION,
-            backend=Cv2Backends.V4L2, fourcc="MJPG",
-        ),
+        # "wrist_left": OpenCVCameraConfig(
+        #     index_or_path="/dev/v4l/by-path/platform-3610000.usb-usb-0:2.1:1.0-video-index0",
+        #     fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION,
+        #     backend=Cv2Backends.V4L2, fourcc="MJPG",
+        # ),
         "wrist_right": OpenCVCameraConfig(
             index_or_path="/dev/v4l/by-path/platform-3610000.usb-usb-0:2.3:1.0-video-index0",
             fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION,
