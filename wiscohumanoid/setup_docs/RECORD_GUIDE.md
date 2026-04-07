@@ -45,3 +45,5 @@ Full found motor list (id: model_number):
 Useful commands:
 `ls -la /dev/v4l/by-path/`: check the usb ports for the cameras
 `ls -la /dev/v4l/by-path/`: check the usb ports for the motor boards
+
+Install servo sdk with this command: python3 -m pip install -e ".[feetech]"
