@@ -58,6 +58,13 @@ def main():
         choices=["so-arm-5dof", "am-arm-6dof"],
         help="Follower arm profile selector.",
     )
+    parser.add_argument(
+        "--calibrate-arm",
+        type=str,
+        default="both",
+        choices=["left", "right", "both"],
+        help="Calibration scope used when you choose to run calibration from the startup prompt.",
+    )
     args = parser.parse_args()
 
     logging.info("Configuring LeKiwi")
@@ -68,7 +75,7 @@ def main():
 
 
     logging.info("Connecting AlohaMini")
-    robot.connect()
+    robot.connect(calibrate_arm=args.calibrate_arm)
 
     logging.info("Starting HostAgent")
     host_config = LeKiwiHostConfig()
@@ -88,8 +95,16 @@ def main():
             try:
                 msg = host.zmq_cmd_socket.recv_string(zmq.NOBLOCK)
                 data = dict(json.loads(msg))
-                #print(f"Received action: {data}")   # debug 
-                _action_sent = robot.send_action(data)
+                command = data.pop("__command__", None)
+                if command == "set_arm_torque":
+                    if data.get("enabled", True):
+                        robot.enable_arm_torque()
+                    else:
+                        robot.disable_arm_torque()
+                        robot.stop_base()
+                else:
+                    #print(f"Received action: {data}")   # debug
+                    _action_sent = robot.send_action(data)
                 
                 last_cmd_time = time.time()
                 watchdog_active = False
@@ -101,10 +116,11 @@ def main():
             now = time.time()
             if (now - last_cmd_time > host.watchdog_timeout_ms / 1000) and not watchdog_active:
                 logging.warning(
-                    f"Command not received for more than {host.watchdog_timeout_ms} milliseconds. Stopping the base."
+                    f"Command not received for more than {host.watchdog_timeout_ms} milliseconds. Stopping base and releasing arm torque."
                 )
                 watchdog_active = True
                 robot.stop_base()
+                robot.disable_arm_torque()
 
             
             last_observation = robot.get_observation()
