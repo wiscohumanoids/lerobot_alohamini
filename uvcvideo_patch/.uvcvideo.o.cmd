@@ -1,0 +1,1 @@
+cmd_/home/badger/lerobot_alohamini/uvcvideo_patch/uvcvideo.o := ld -EL  -maarch64elf -z noexecstack   -r -o /home/badger/lerobot_alohamini/uvcvideo_patch/uvcvideo.o @/home/badger/lerobot_alohamini/uvcvideo_patch/uvcvideo.mod

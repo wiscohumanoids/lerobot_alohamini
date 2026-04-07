@@ -1,0 +1,1 @@
+cmd_/home/badger/lerobot_alohamini/uvcvideo_patch/uvcvideo.mod := printf '%s\n'   uvc_driver.o uvc_queue.o uvc_v4l2.o uvc_video.o uvc_ctrl.o uvc_status.o uvc_isight.o uvc_debugfs.o uvc_metadata.o uvc_entity.o | awk '!x[$$0]++ { print("/home/badger/lerobot_alohamini/uvcvideo_patch/"$$0) }' > /home/badger/lerobot_alohamini/uvcvideo_patch/uvcvideo.mod
