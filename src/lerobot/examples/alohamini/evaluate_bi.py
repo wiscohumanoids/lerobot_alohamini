@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+import argparse
+import time
+
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.datasets.utils import hw_to_dataset_features
 from lerobot.policies.act.modeling_act import ACTPolicy
@@ -9,10 +12,28 @@ from lerobot.robots.alohamini import LeKiwiClient, LeKiwiClientConfig
 from lerobot.scripts.lerobot_record import record_loop
 from lerobot.utils.constants import ACTION, OBS_STR
 from lerobot.utils.control_utils import init_keyboard_listener
+from lerobot.utils.robot_utils import precise_sleep
 from lerobot.utils.utils import log_say
 from lerobot.utils.visualization_utils import init_rerun
 
-import argparse
+
+def wait_for_reset(robot: LeKiwiClient, events: dict, reset_time_s: int) -> None:
+    if reset_time_s <= 0:
+        return
+
+    log_say(f"Reset the environment. Waiting {reset_time_s} seconds before the next episode.")
+    robot.disable_arm_torque()
+    try:
+        end_time = time.perf_counter() + reset_time_s
+
+        while time.perf_counter() < end_time:
+            if events["stop_recording"] or events["exit_early"]:
+                events["exit_early"] = False
+                break
+
+            precise_sleep(min(0.1, end_time - time.perf_counter()))
+    finally:
+        robot.enable_arm_torque()
 
 
 def main():
@@ -20,6 +41,7 @@ def main():
     parser.add_argument("--num_episodes", type=int, default=2, help="Number of episodes to record")
     parser.add_argument("--fps", type=int, default=30, help="Frames per second")
     parser.add_argument("--episode_time", type=int, default=60, help="Duration of each episode in seconds")
+    parser.add_argument("--reset_time", type=int, default=10, help="Idle reset time between episodes in seconds")
     parser.add_argument("--task_description", type=str, default="My task description", help="Description of the task")
     parser.add_argument("--hf_model_id", type=str, required=True, help="HuggingFace model repo id")
     parser.add_argument("--hf_dataset_id", type=str, required=True, help="HuggingFace dataset repo id")
@@ -91,7 +113,11 @@ def main():
             dataset.save_episode()
             recorded_episodes += 1
 
+            if recorded_episodes < args.num_episodes:
+                wait_for_reset(robot, events, args.reset_time)
+
     log_say("Stop recording")
+    robot.disable_arm_torque()
     robot.disconnect()
     listener.stop()
     dataset.finalize()
