@@ -106,6 +106,12 @@ if [ -d "/dev" ]; then
         done
     fi
 
+    # Stable by-path symlinks (created automatically by Linux for V4L2 devices)
+    if [ -d /dev/v4l/by-path ]; then
+        echo "Mounting stable V4L2 by-path symlinks..."
+        DOCKER_ARGS+=(-v /dev/v4l:/dev/v4l)
+    fi
+
     # Audio devices (for voice control)
     if [ -e "/dev/snd" ]; then
         DOCKER_ARGS+=(--device=/dev/snd)
