@@ -46,4 +46,7 @@ Useful commands:
 `ls -la /dev/v4l/by-path/`: check the usb ports for the cameras
 `ls -la /dev/v4l/by-path/`: check the usb ports for the motor boards
 
-Install servo sdk with this command: python3 -m pip install -e ".[feetech]"
+Use this command to install all the libraries needed in the root folder: `python3 -m pip install -e .`
+It will still be missing two libraries:
+- Install servo sdk with this command: `python3 -m pip install -e ".[feetech]"`
+- Install zmq: `pip install zmq`
