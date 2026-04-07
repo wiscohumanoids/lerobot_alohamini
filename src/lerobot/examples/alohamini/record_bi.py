@@ -12,6 +12,7 @@ from lerobot.teleoperators.bi_so_leader import BiSOLeader, BiSOLeaderConfig
 from lerobot.teleoperators.so_leader import SOLeaderConfig
 from lerobot.utils.constants import ACTION, OBS_STR
 from lerobot.utils.control_utils import init_keyboard_listener
+from lerobot.utils.errors import DeviceNotConnectedError
 from lerobot.utils.utils import log_say
 from lerobot.utils.visualization_utils import init_rerun
 
@@ -38,6 +39,18 @@ def main():
         choices=["so-arm-5dof", "am-arm-6dof"],
         help="Arm profile selector used for both leader and follower consistency.",
     )
+    parser.add_argument(
+        "--vcodec",
+        type=str,
+        default="h264",
+        choices=["h264", "hevc", "libsvtav1"],
+        help="Video codec used when encoding recorded camera streams.",
+    )
+    parser.add_argument(
+    "--disable_rerun",
+        action="store_true",
+        help="Disable rerun visualization to avoid native viewer crashes on macOS.",
+    )
     parser.add_argument("--resume", action="store_true", help="Resume recording on existing dataset")
 
     args = parser.parse_args()
@@ -46,11 +59,11 @@ def main():
     robot_config = LeKiwiClientConfig(remote_ip=args.remote_ip, id=args.robot_id)
     leader_arm_config = BiSOLeaderConfig(
         left_arm_config=SOLeaderConfig(
-            port="/dev/am_arm_leader_left",
+            port="/dev/cu.usbmodem5B140323471",
             arm_profile=args.arm_profile,
         ),
         right_arm_config=SOLeaderConfig(
-            port="/dev/am_arm_leader_right",
+            port="/dev/cu.usbmodem5B140330511",
             arm_profile=args.arm_profile,
         ),
         id=args.leader_id,
@@ -74,6 +87,7 @@ def main():
         print("Resuming existing dataset:", args.dataset)
         dataset = LeRobotDataset(
             args.dataset,
+            vcodec=args.vcodec,
         )
         dataset.start_image_writer(num_threads=4)
     else:
@@ -84,6 +98,7 @@ def main():
             robot_type=robot.name,
             use_videos=True,
             image_writer_threads=4,
+            vcodec=args.vcodec,
         )
         print(f"Dataset created with id: {dataset.repo_id}")
 
@@ -93,7 +108,8 @@ def main():
     keyboard.connect()
 
     listener, events = init_keyboard_listener()
-    init_rerun(session_name="lekiwi_record")
+    if not args.disable_rerun:
+        init_rerun(session_name="lekiwi_record")
 
     if not robot.is_connected or not leader_arm.is_connected or not keyboard.is_connected:
         raise ValueError("Robot or teleop is not connected!")
@@ -113,7 +129,7 @@ def main():
             teleop=[leader_arm, keyboard],
             control_time_s=args.episode_time,
             single_task=args.task_description,
-            display_data=True,
+            display_data=not args.disable_rerun,
             teleop_action_processor=teleop_action_processor,
             robot_action_processor=robot_action_processor,
             robot_observation_processor=robot_observation_processor,
@@ -131,7 +147,7 @@ def main():
                 teleop=[leader_arm, keyboard],
                 control_time_s=args.reset_time,
                 single_task=args.task_description,
-                display_data=True,
+                display_data=not args.disable_rerun,
                 teleop_action_processor=teleop_action_processor,
                 robot_action_processor=robot_action_processor,
                 robot_observation_processor=robot_observation_processor,
@@ -149,12 +165,22 @@ def main():
 
     # === Clean up ===
     log_say("Stop recording")
-    robot.disconnect()
-    leader_arm.disconnect()
-    keyboard.disconnect()
     listener.stop()
     dataset.finalize()
     dataset.push_to_hub()
+
+    try:
+        robot.disconnect()
+    except DeviceNotConnectedError:
+        pass
+    try:
+        leader_arm.disconnect()
+    except DeviceNotConnectedError:
+        pass
+    try:
+        keyboard.disconnect()
+    except DeviceNotConnectedError:
+        pass
 
 
 if __name__ == "__main__":
