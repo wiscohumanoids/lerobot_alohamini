@@ -20,7 +20,7 @@ import os
 import time
 from functools import cached_property
 from itertools import chain
-from typing import Any
+from typing import Any, Literal
 import sys
 
 import numpy as np
@@ -41,6 +41,8 @@ from .config_lekiwi import LeKiwiConfig
 logger = logging.getLogger(__name__)
 
 from .lift_axis import LiftAxis, LiftAxisConfig
+
+CalibrationArm = Literal["left", "right", "both"]
 
 
 class LeKiwi(Robot):
@@ -185,6 +187,7 @@ class LeKiwi(Robot):
         self._overcurrent_count: dict[str, int] = {}
         self._overcurrent_trip_n = 20
         self._last_currents_log_t = 0.0
+        self._camera_read_failures: dict[str, int] = {}
 
 
     @property
@@ -222,12 +225,12 @@ class LeKiwi(Robot):
     
     @property
     def is_connected(self) -> bool:
-        cams_ok = all(cam.is_connected for cam in self.cameras.values())
-        return self.left_bus.is_connected and (self.right_bus.is_connected if self.right_bus else True) and cams_ok
+        buses_ok = self.left_bus.is_connected and (self.right_bus.is_connected if self.right_bus else True)
+        return buses_ok
 
 
     @check_if_already_connected
-    def connect(self, calibrate: bool = True) -> None:
+    def connect(self, calibrate: bool = True, calibrate_arm: CalibrationArm = "both") -> None:
         self.left_bus.connect()
         self.right_bus.connect()
         self.base_bus.connect()
@@ -235,7 +238,7 @@ class LeKiwi(Robot):
             logger.info(
                 "Mismatch between calibration values in the motor and the calibration file or no calibration file found"
             )
-            self.calibrate()
+            self.calibrate(calibrate_arm=calibrate_arm)
 
         for cam in self.cameras.values():
             cam.connect()
@@ -252,7 +255,105 @@ class LeKiwi(Robot):
     def is_calibrated(self) -> bool:
         return self.left_bus.is_calibrated
 
-    def calibrate(self) -> None:
+    def _write_existing_calibration_to_buses(self) -> None:
+        logger.info("Writing existing calibration to both buses (trim per-bus caches)")
+
+        calib_left = {k: v for k, v in self.calibration.items() if k in self.left_bus.motors}
+        self.left_bus.write_calibration(calib_left, cache=False)
+        self.left_bus.calibration = calib_left
+
+        calib_right = {k: v for k, v in self.calibration.items() if k in self.right_bus.motors}
+        self.right_bus.write_calibration(calib_right, cache=False)
+        self.right_bus.calibration = calib_right
+
+        calib_base = {k: v for k, v in self.calibration.items() if k in self.base_bus.motors}
+        self.base_bus.write_calibration(calib_base, cache=False)
+        self.base_bus.calibration = calib_base
+
+    def _calibrate_arm_bus(
+        self,
+        bus: FeetechMotorsBus,
+        arm_motors: list[str],
+        arm_label: str,
+        full_turn_motor: str,
+    ) -> tuple[dict[str, int], dict[str, int], dict[str, int]]:
+        if not arm_motors:
+            raise RuntimeError(f"{arm_label}_arm_motors is empty; expected configured arm motor names")
+
+        bus.disable_torque(arm_motors)
+        for name in arm_motors:
+            bus.write("Operating_Mode", name, OperatingMode.POSITION.value)
+
+        input(f"Move {arm_label.upper()} arm to the middle of its range of motion, then press ENTER...")
+        homing = bus.set_half_turn_homings(arm_motors)
+
+        full_turn_motors = [full_turn_motor] if full_turn_motor in arm_motors else []
+        unknown_range_motors = [m for m in arm_motors if m not in full_turn_motors]
+
+        print(
+            f"Move {arm_label.upper()} arm joints sequentially through full ROM "
+            f"(except '{full_turn_motor}'). Press ENTER to stop..."
+        )
+        range_mins, range_maxs = bus.record_ranges_of_motion(unknown_range_motors)
+        for motor_name in full_turn_motors:
+            range_mins[motor_name] = 0
+            range_maxs[motor_name] = 4095
+
+        return homing, range_mins, range_maxs
+
+    def _build_motor_calibration(
+        self,
+        bus: FeetechMotorsBus,
+        homing_offsets: dict[str, int],
+        range_mins: dict[str, int],
+        range_maxs: dict[str, int],
+    ) -> dict[str, MotorCalibration]:
+        calibration: dict[str, MotorCalibration] = {}
+        for name, motor in bus.motors.items():
+            calibration[name] = MotorCalibration(
+                id=motor.id,
+                drive_mode=0,
+                homing_offset=homing_offsets.get(name, 0),
+                range_min=range_mins.get(name, 0),
+                range_max=range_maxs.get(name, 4095),
+            )
+        return calibration
+
+    def _build_base_calibration(self) -> dict[str, MotorCalibration]:
+        if not self.base_motors:
+            raise RuntimeError("base_motors is empty; expected names starting with 'base_'")
+
+        self.base_bus.disable_torque(self.base_motors)
+        for name in self.base_motors:
+            self.base_bus.write("Operating_Mode", name, OperatingMode.POSITION.value)
+
+        homing_offsets = {wheel: 0 for wheel in self.base_motors}
+        range_mins = {motor_name: 0 for motor_name in self.base_motors}
+        range_maxs = {motor_name: 4095 for motor_name in self.base_motors}
+        return self._build_motor_calibration(self.base_bus, homing_offsets, range_mins, range_maxs)
+
+    def _require_preserved_calibration(self, calibrate_arm: CalibrationArm) -> None:
+        if calibrate_arm == "both":
+            return
+        if not self.calibration:
+            raise RuntimeError(
+                f"Single-arm calibration for '{calibrate_arm}' requires an existing calibration file "
+                "so the untouched arm and base entries can be preserved."
+            )
+
+        if calibrate_arm == "left":
+            required_names = [*self.right_bus.motors.keys(), *self.base_bus.motors.keys()]
+        else:
+            required_names = [*self.left_bus.motors.keys(), *self.base_bus.motors.keys()]
+
+        missing_names = [name for name in required_names if name not in self.calibration]
+        if missing_names:
+            raise RuntimeError(
+                "Existing calibration is missing entries required for single-arm calibration: "
+                + ", ".join(missing_names)
+            )
+
+    def calibrate(self, calibrate_arm: CalibrationArm = "both") -> None:
         """
         Dual-arm calibration (left arm + chassis on self.left_bus, right arm on self.right_bus):
         - Left arm: position mode → half-turn homing → collect ROM
@@ -267,140 +368,37 @@ class LeKiwi(Robot):
                 f"or type 'c' and press ENTER to run calibration: "
             )
             if user_input.strip().lower() != "c":
-                logger.info("Writing existing calibration to both buses (trim per-bus caches)")
-
-                calib_left = {k: v for k, v in self.calibration.items() if k in self.left_bus.motors}
-                self.left_bus.write_calibration(calib_left, cache=False)
-                self.left_bus.calibration = calib_left
-
-                calib_right = {k: v for k, v in self.calibration.items() if k in self.right_bus.motors}
-                self.right_bus.write_calibration(calib_right, cache=False)
-                self.right_bus.calibration = calib_right
-
-                calib_base = {k: v for k, v in self.calibration.items() if k in self.base_bus.motors}
-                self.base_bus.write_calibration(calib_base, cache=False)
-                self.base_bus.calibration = calib_base
-
+                self._write_existing_calibration_to_buses()
                 return
 
-        logger.info(f"\nRunning calibration of {self} (left, right, and base buses)")
+        self._require_preserved_calibration(calibrate_arm)
 
-        # LEFT ARM CALIBRATION
+        logger.info(f"\nRunning calibration of {self} ({calibrate_arm} selection)")
+        updated_calibration = dict(self.calibration)
 
-        if not getattr(self, "left_arm_motors", None):
-            raise RuntimeError("left_arm_motors is empty; expected names starting with 'left_arm_'")
-
-        self.left_bus.disable_torque(self.left_arm_motors)
-        for name in self.left_arm_motors:
-            self.left_bus.write("Operating_Mode", name, OperatingMode.POSITION.value)
-
-        input("Move LEFT arm to the middle of its range of motion, then press ENTER...")
-        left_homing = self.left_bus.set_half_turn_homings(self.left_arm_motors)
-
-        left_full_turn_motor = "arm_left_wrist_roll"
-        full_turn_left = [left_full_turn_motor] if left_full_turn_motor in self.left_arm_motors else []
-        unknown_left = [m for m in self.left_arm_motors if m not in full_turn_left]
-
-        print(
-            f"Move LEFT arm joints sequentially through full ROM (except '{left_full_turn_motor}'). "
-            "Press ENTER to stop..."
-        )
-        l_mins, l_maxs = self.left_bus.record_ranges_of_motion(unknown_left)
-        for m in full_turn_left:
-            l_mins[m] = 0
-            l_maxs[m] = 4095
-
-        right_homing = {}
-        r_mins, r_maxs = {}, {}
-
-
-        # RIGHT ARM CALIBRATION
-
-        if not getattr(self, "right_arm_motors", None):
-            raise RuntimeError("right_arm_motors is empty; expected names starting with 'right_arm_'")
-
-        self.right_bus.disable_torque(self.right_arm_motors)
-        for name in self.right_arm_motors:
-            self.right_bus.write("Operating_Mode", name, OperatingMode.POSITION.value)
-
-        input("Move RIGHT arm to the middle of its range of motion, then press ENTER...")
-        right_homing = self.right_bus.set_half_turn_homings(self.right_arm_motors)
-
-        right_full_turn_motor = "arm_right_wrist_roll"
-        full_turn_right = [right_full_turn_motor] if right_full_turn_motor in self.right_arm_motors else []
-        unknown_right = [m for m in self.right_arm_motors if m not in full_turn_right]
-
-        print(
-            f"Move RIGHT arm joints sequentially through full ROM (except '{right_full_turn_motor}'). "
-            "Press ENTER to stop..."
-        )
-        r_mins, r_maxs = self.right_bus.record_ranges_of_motion(unknown_right)
-        for m in full_turn_right:
-            r_mins[m] = 0
-            r_maxs[m] = 4095
-
-
-        # BASE MOTOR CALIBRATION
-
-        if not getattr(self, "base_motors", None):
-            raise RuntimeError("base_motors is empty; expected names starting with 'base_'")
-        
-        self.base_bus.disable_torque(self.base_motors)
-        for name in self.base_motors:
-            self.base_bus.write("Operating_Mode", name, OperatingMode.POSITION.value)
-
-        base_homing = {}
-        for wheel in self.base_motors:
-            base_homing[wheel] = 0
-
-        b_mins, b_maxs = {}, {}
-        for m in self.base_motors:
-            b_mins[m] = 0
-            b_maxs[m] = 4095
-
-
-        # Merge → filter by bus and write back → save as a single file
-        self.calibration = {}
-
-        for name, motor in self.left_bus.motors.items():
-            self.calibration[name] = MotorCalibration(
-                id=motor.id,
-                drive_mode=0,
-                homing_offset=left_homing.get(name, 0),
-                range_min=l_mins.get(name, 0),
-                range_max=l_maxs.get(name, 4095),
+        if calibrate_arm in ("both", "left"):
+            left_homing, l_mins, l_maxs = self._calibrate_arm_bus(
+                self.left_bus,
+                self.left_arm_motors,
+                "left",
+                "arm_left_wrist_roll",
             )
+            updated_calibration.update(self._build_motor_calibration(self.left_bus, left_homing, l_mins, l_maxs))
 
-        for name, motor in self.right_bus.motors.items():
-            self.calibration[name] = MotorCalibration(
-                id=motor.id,
-                drive_mode=0,
-                homing_offset=right_homing.get(name, 0),
-                range_min=r_mins.get(name, 0),
-                range_max=r_maxs.get(name, 4095),
+        if calibrate_arm in ("both", "right"):
+            right_homing, r_mins, r_maxs = self._calibrate_arm_bus(
+                self.right_bus,
+                self.right_arm_motors,
+                "right",
+                "arm_right_wrist_roll",
             )
+            updated_calibration.update(self._build_motor_calibration(self.right_bus, right_homing, r_mins, r_maxs))
 
-        for name, motor in self.base_bus.motors.items():
-            self.calibration[name] = MotorCalibration(
-                id=motor.id,
-                drive_mode=0,
-                homing_offset=base_homing.get(name, 0),
-                range_min=b_mins.get(name, 0),
-                range_max=b_maxs.get(name, 4095),
-            )
+        if calibrate_arm == "both":
+            updated_calibration.update(self._build_base_calibration())
 
-        # Write back: each bus only writes its own entries to avoid KeyError
-        calib_left = {k: v for k, v in self.calibration.items() if k in self.left_bus.motors}
-        self.left_bus.write_calibration(calib_left, cache=False)
-        self.left_bus.calibration = calib_left
-
-        calib_right = {k: v for k, v in self.calibration.items() if k in self.right_bus.motors}
-        self.right_bus.write_calibration(calib_right, cache=False)
-        self.right_bus.calibration = calib_right
-
-        calib_base = {k: v for k, v in self.calibration.items() if k in self.base_bus.motors}
-        self.base_bus.write_calibration(calib_base, cache=False)
-        self.base_bus.calibration = calib_base
+        self.calibration = updated_calibration
+        self._write_existing_calibration_to_buses()
 
         self._save_calibration()
         print("Calibration saved to", self.calibration_fpath)
@@ -419,6 +417,9 @@ class LeKiwi(Robot):
             # Set I_Coefficient and D_Coefficient to default value 0 and 32
             self.left_bus.write("I_Coefficient", name, 0)
             self.left_bus.write("D_Coefficient", name, 32)
+            if name.endswith("_gripper"):
+                self.left_bus.write("Torque_Limit", name, self.config.gripper_torque_limit)
+                logger.info(f"Gripper '{name}' torque limited to {self.config.gripper_torque_limit}/1023")
 
         for name in self.base_motors:
             self.base_bus.write("Operating_Mode", name, OperatingMode.VELOCITY.value)
@@ -432,6 +433,9 @@ class LeKiwi(Robot):
             self.right_bus.write("P_Coefficient", name, 16)
             self.right_bus.write("I_Coefficient", name, 0)
             self.right_bus.write("D_Coefficient", name, 32)
+            if name.endswith("_gripper"):
+                self.right_bus.write("Torque_Limit", name, self.config.gripper_torque_limit)
+                logger.info(f"Gripper '{name}' torque limited to {self.config.gripper_torque_limit}/1023")
         #self.right_bus.enable_torque()
 
         #self.lift.configure()
@@ -589,7 +593,32 @@ class LeKiwi(Robot):
             return float(raw) * 6.5
         except Exception:
             return 0.0
-        
+
+    def _read_camera_observation(self, cam_key: str, cam: Any) -> np.ndarray:
+        """Read camera frame, tolerating brief transient failures."""
+        try:
+            frame = cam.async_read()
+            self._camera_read_failures[cam_key] = 0
+            return frame
+        except Exception as e:
+            fail_count = self._camera_read_failures.get(cam_key, 0) + 1
+            self._camera_read_failures[cam_key] = fail_count
+
+            # Try using the most recent buffered frame for brief glitches.
+            try:
+                return cam.read_latest(max_age_ms=2000)
+            except Exception:
+                pass
+
+            if fail_count >= 10:
+                raise RuntimeError(
+                    f"Camera '{cam_key}' failed {fail_count} consecutive reads. "
+                    f"Last error: {e}"
+                ) from e
+
+            logger.warning(f"{self} camera '{cam_key}' read failed {fail_count}/10 ({e})")
+            raise
+
     @check_if_not_connected
     def get_observation(self) -> RobotObservation:
         # Read actuators position for arm and vel for base
@@ -627,7 +656,7 @@ class LeKiwi(Robot):
         # Capture images from cameras
         for cam_key, cam in self.cameras.items():
             start = time.perf_counter()
-            obs_dict[cam_key] = cam.async_read()
+            obs_dict[cam_key] = self._read_camera_observation(cam_key, cam)
             dt_ms = (time.perf_counter() - start) * 1e3
             logger.debug(f"{self} read {cam_key}: {dt_ms:.1f}ms")
 
@@ -702,6 +731,16 @@ class LeKiwi(Robot):
         self.base_bus.sync_write("Goal_Velocity", dict.fromkeys(self.base_motors, 0), num_retry=0)
         logger.info("Base motors stopped")
 
+    def disable_arm_torque(self):
+        self.left_bus.disable_torque(self.left_arm_motors)
+        if self.right_bus:
+            self.right_bus.disable_torque(self.right_arm_motors)
+
+    def enable_arm_torque(self):
+        self.left_bus.enable_torque(self.left_arm_motors)
+        if self.right_bus:
+            self.right_bus.enable_torque(self.right_arm_motors)
+
     def read_and_check_currents(self, limit_ma, print_currents):
         """Read left/right bus currents (mA), print them, and enforce overcurrent protection"""
         scale = 6.5  # sts3215 current unit conversion factor
@@ -759,7 +798,10 @@ class LeKiwi(Robot):
         self.stop_base()
         self.left_bus.disconnect(self.config.disable_torque_on_disconnect)
         self.right_bus.disconnect(self.config.disable_torque_on_disconnect)
-        for cam in self.cameras.values():
-            cam.disconnect()
+        for cam_key, cam in self.cameras.items():
+            try:
+                cam.disconnect()
+            except Exception as e:
+                logger.warning(f"{self} camera '{cam_key}' disconnect failed: {e}")
 
         logger.info(f"{self} disconnected.")
