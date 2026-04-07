@@ -52,3 +52,5 @@ Use this command to install all the libraries needed in the root folder: `python
 It will still be missing two libraries:
 - Install servo sdk with this command: `python3 -m pip install -e ".[feetech]"`
 - Install zmq: `pip install zmq`
+
+If the battery is charging, simply use the outlet to power the motor boards.
