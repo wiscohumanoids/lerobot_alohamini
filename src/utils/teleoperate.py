@@ -136,7 +136,8 @@ while True:
         "x.vel": 0.0,
         "y.vel": 0.0,
         "theta.vel": 0.0,
-        "lift_axis.height_mm": action["lift_axis.height_mm"] 
+        "lift_axis.height_mm": 0.0  # DISABLED
+        #"lift_axis.height_mm": action["lift_axis.height_mm"] 
     }
 
     for k in MOVE_BINDINGS.keys():

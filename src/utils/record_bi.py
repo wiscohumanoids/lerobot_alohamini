@@ -1,23 +1,111 @@
 #!/usr/bin/env python3
 
+from datetime import datetime
+import argparse
+from pathlib import Path
+import sys
+import time
+import termios
+import tty
+import select
 from email import parser
+
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.datasets.utils import hw_to_dataset_features
 from lerobot.processor import make_default_processors
 from lerobot.robots.alohamini.config_lekiwi import LeKiwiClientConfig
 from lerobot.robots.alohamini.lekiwi_client import LeKiwiClient
 from lerobot.scripts.lerobot_record import record_loop
-from lerobot.teleoperators.keyboard import KeyboardTeleop, KeyboardTeleopConfig
 from lerobot.teleoperators.bi_so_leader import BiSOLeader, BiSOLeaderConfig
 from lerobot.teleoperators.so_leader import SOLeaderConfig
 from lerobot.utils.constants import ACTION, OBS_STR
 from lerobot.utils.control_utils import init_keyboard_listener
-from lerobot.utils.utils import log_say
 from lerobot.utils.visualization_utils import init_rerun
 
-from datetime import datetime
-import argparse
-from pathlib import Path
+
+def get_all_keys():
+    """Read all available characters from stdin at once without blocking"""
+    keys = []
+    settings = termios.tcgetattr(sys.stdin)
+    tty.setraw(sys.stdin.fileno())
+    while True:
+        rlist, _, _ = select.select([sys.stdin], [], [], 0.01)
+        if rlist:
+            keys.append(sys.stdin.read(1))
+        else:
+            break
+    termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
+    return keys
+
+
+def limit(val, min_val, max_val):
+    """Limit a value between min and max"""
+    return max(min(val, max_val), min_val)
+
+
+class CustomKeyboardHandler:
+    """Custom keyboard handler using raw input for direct teleoperation control"""
+    
+    def __init__(self):
+        self._docker_keyboard_overload = True  # marker attribute to identify this class as a keyboard handler for compatibility with record_loop
+
+        self.MOVE_BINDINGS = {
+            'w': ('x.vel', 0.1),
+            's': ('x.vel', -0.1),
+            'a': ('y.vel', 0.1),
+            'd': ('y.vel', -0.1),
+            'q': ('theta.vel', 8.0),
+            'e': ('theta.vel', -8.0),
+            'u': ('lift_axis.height_mm', 4.0),
+            'j': ('lift_axis.height_mm', -4.0),
+        }
+        self.key_last_received = {k: 0 for k in self.MOVE_BINDINGS.keys()}
+        self.KEY_TIMEOUT = 0.2
+        self.is_connected = True
+    
+    def connect(self):
+        """Placeholder for compatibility with other teleop devices"""
+        self.is_connected = True
+    
+    def disconnect(self):
+        """Placeholder for compatibility with other teleop devices"""
+        self.is_connected = False
+    
+    def get_action(self):
+        """Get keyboard action with timeout-based key repeat"""
+        current_time = time.time()
+        keys_pressed = get_all_keys()
+        
+        # Update last received time for pressed keys
+        for k in keys_pressed:
+            if k in self.key_last_received:
+                self.key_last_received[k] = current_time
+            if k == '\x1b':  # escape for exit
+                sys.exit(0)
+        
+        # Build action from current key states
+        action = {
+            "x.vel": 0.0,
+            "y.vel": 0.0,
+            "theta.vel": 0.0,
+            "lift_axis.height_mm": 0.0
+        }
+        
+        for k in self.MOVE_BINDINGS.keys():
+            if k in self.key_last_received and current_time - self.key_last_received[k] < self.KEY_TIMEOUT:
+                attr, val = self.MOVE_BINDINGS[k]
+                action[attr] += val
+        
+        action["lift_axis.height_mm"] = 0.0  # disable lift axis
+        
+        # Space bar to stop
+        if ' ' in keys_pressed:
+            action["x.vel"] = 0.0
+            action["y.vel"] = 0.0
+            action["theta.vel"] = 0.0
+        
+        return action
+
 
 def main():
     parser = argparse.ArgumentParser(description="Record episodes with bi-arm teleoperation")
@@ -46,20 +134,19 @@ def main():
     robot_config = LeKiwiClientConfig(remote_ip=args.remote_ip, id=args.robot_id)
     leader_arm_config = BiSOLeaderConfig(
         left_arm_config=SOLeaderConfig(
-            port="/dev/am_arm_leader_left",
+            port="/dev/ttyACM0",
             arm_profile=args.arm_profile,
         ),
         right_arm_config=SOLeaderConfig(
-            port="/dev/am_arm_leader_right",
+            port="/dev/ttyACM1",
             arm_profile=args.arm_profile,
         ),
         id=args.leader_id,
     )
-    keyboard_config = KeyboardTeleopConfig()
 
     robot = LeKiwiClient(robot_config)
     leader_arm = BiSOLeader(leader_arm_config)
-    keyboard = KeyboardTeleop(keyboard_config)
+    keyboard = CustomKeyboardHandler()
 
     teleop_action_processor, robot_action_processor, robot_observation_processor = make_default_processors()
 
@@ -95,14 +182,14 @@ def main():
     listener, events = init_keyboard_listener()
     init_rerun(session_name="lekiwi_record")
 
-    if not robot.is_connected or not leader_arm.is_connected or not keyboard.is_connected:
+    if not robot.is_connected or not leader_arm.is_connected:
         raise ValueError("Robot or teleop is not connected!")
 
     print("Starting record loop...")
     recorded_episodes = 0
 
     while recorded_episodes < args.num_episodes and not events["stop_recording"]:
-        log_say(f"Recording episode {recorded_episodes + 1} of {args.num_episodes}")
+        print(f"Recording episode {recorded_episodes + 1} of {args.num_episodes}")
 
         # === Main record loop ===
         record_loop(
@@ -123,7 +210,7 @@ def main():
         if not events["stop_recording"] and (
             (recorded_episodes < args.num_episodes - 1) or events["rerecord_episode"]
         ):
-            log_say("Reset the environment")
+            print("Reset the environment")
             record_loop(
                 robot=robot,
                 events=events,
@@ -138,7 +225,7 @@ def main():
             )
 
         if events["rerecord_episode"]:
-            log_say("Re-record episode")
+            print("Re-record episode")
             events["rerecord_episode"] = False
             events["exit_early"] = False
             dataset.clear_episode_buffer()
@@ -148,7 +235,7 @@ def main():
         recorded_episodes += 1
 
     # === Clean up ===
-    log_say("Stop recording")
+    print("Stop recording")
     robot.disconnect()
     leader_arm.disconnect()
     keyboard.disconnect()

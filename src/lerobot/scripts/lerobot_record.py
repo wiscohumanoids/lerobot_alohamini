@@ -289,7 +289,7 @@ def record_loop(
 
     teleop_arm = teleop_keyboard = None
     if isinstance(teleop, list):
-        teleop_keyboard = next((t for t in teleop if isinstance(t, KeyboardTeleop)), None)
+        teleop_keyboard = next((t for t in teleop if isinstance(t, KeyboardTeleop) or hasattr(t, '_docker_keyboard_overload')), None)
         teleop_arm = next(
             (
                 t
