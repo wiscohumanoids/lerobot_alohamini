@@ -71,3 +71,6 @@ lerobot-train ^
   --policy.repo_id=wiscohumanoids/act_v38_cuda_policy ^
   --wandb.enable=false
 ```
+
+Command for rerun:
+`rerun --web-viewer-port 9091`
