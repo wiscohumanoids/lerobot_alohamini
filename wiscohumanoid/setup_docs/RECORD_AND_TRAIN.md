@@ -54,3 +54,20 @@ It will still be missing two libraries:
 - Install zmq: `pip install zmq`
 
 If the battery is charging, simply use the outlet to power the motor boards.
+
+For training:
+```
+lerobot-train ^
+  --dataset.repo_id=wiscohumanoids/alohamini_cube_place_5dof_v38 ^
+  --dataset.video_backend=pyav ^
+  --policy.type=act ^
+  --policy.device=cuda ^
+  --output_dir=outputs/train/act_v38_cuda ^
+  --job_name=act_v38_cuda ^
+  --batch_size=8 ^
+  --steps=50000 ^
+  --save_freq=10000 ^
+  --log_freq=100 ^
+  --policy.repo_id=wiscohumanoids/act_v38_cuda_policy ^
+  --wandb.enable=false
+```
