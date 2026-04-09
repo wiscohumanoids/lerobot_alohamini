@@ -22,6 +22,7 @@ lerobot_alohamini/
 
 ## Installation
 
+*If using WINDOWS*, ensure you have WSL2 Ubuntu 24.04 LTS installed and enter it by running `wsl`. 
 First, clone this repo into a folder of your choosing:
 
 ```bash
@@ -29,7 +30,7 @@ git clone https://github.com/wiscohumanoids/lerobot_alohamini.git
 cd lerobot_alohamini
 ```
 
-*If using WINDOWS*, ensure you have WSL2 Ubuntu 24.04 LTS installed and enter it by running `wsl`. Now, create & source the virtual environment we'll use for dependencies:
+Now, create & source the virtual environment we'll use for dependencies:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
