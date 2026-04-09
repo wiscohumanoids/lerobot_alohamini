@@ -1,15 +1,16 @@
 # WiscoHumanoids AlohaMini
 
+***IMPORTANT:*** FORMERLY, we were using a Docker image in the name of cross-platform compatibility, but this ridiculously overcomplicated communication with the robot, leader arms (teleop), and Huggingface. Please do a fresh re-install of this repository according to [these instructions](#installation).
+
 
 ## Directory Structure
 
-Since this is a fork of a fork of an open-source repo, it's a fair bit messy. Overall structure for our purposes is as follows:
+Overall structure is as follows:
 
 ```
 lerobot_alohamini/
 ├── calibration/         # robot & leader calibration files (mounted accordingly in container)
 ├── datasets/            # storage (mounted accordingly in container for persistence)
-├── docker/              # docker container setup & run scripts
 ├── docs/                # mostly outdated extra docs
 ├── scripts/             # scripts for working with the alohamini in the container
 ├── simulation/          # scripts & assets for simulation
@@ -19,66 +20,49 @@ lerobot_alohamini/
     └── lerobot/         # modified LeRobot source
 ```
 
-## Setup & Onboarding
+## Installation
 
-1. First, build the Docker image at `sudo ./docker/build.sh`. This entire environment - whether it's running on your laptop, the Jetson, or a remote server, will use the associated container.
-2. Start the container through `cd docker` followed by `sudo run.sh`, or join (create a new shell for) an existing instance with `sudo ./docker/join.sh`. 
-3. **Explore documentation & codebase:**
-   * Familiarize yourself with the overall robot by reading through [`docs/STARTUP_GUIDE.md`](setup_docs/STARTUP_GUIDE.md), [`docs/ALOHAMINI_ARCHITECTURE.md`](setup_docs/ALOHAMINI_ARCHITECTURE.md), and [`docs/ALOHAMINI_CAPABILITIES_REPORT.md`](setup_docs/ALOHAMINI_CAPABILITIES_REPORT.md)
-      * *Note: all documentation assumes you're working from the **container**, and will NOT function easily otherwise!*
-   * If helpful, try this interactive tutorial at [`docs/AlohaMini_Walkthrough.ipynb`](setup_docs/AlohaMini_Walkthrough.ipynb)
-   Interactive tutorial walking through the codebase
-   * Read any & all research material available in our [shared Google Drive](https://drive.google.com/drive/folders/1nRqpTXZkhCgcrnd-XB8d54YkAPep3cdM)
+First, clone this repo into a folder of your choosing:
+
+```bash
+git clone https://github.com/wiscohumanoids/lerobot_alohamini.git
+cd lerobot_alohamini
+```
+
+*If using WINDOWS*, ensure you have WSL2 Ubuntu 24.04 LTS installed and enter it by running `wsl`. Now, create & source the virtual environment we'll use for dependencies:
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+Install all dependencies as described in `pyproject.toml` (plus a few extra, this might take a while...):
+
+```bash
+pip install -e .[all]
+pip install feetech-servo-sdk
+pip install zmq
+```
+
+Run the following calibration setup script with:
+
+```bash
+./scripts/calib_sync.sh
+```
+
+You should now be all set!
+
+## Onboarding
+
+In order to get up to speed, please read any & all research material available in our [shared Google Drive](https://drive.google.com/drive/folders/1nRqpTXZkhCgcrnd-XB8d54YkAPep3cdM). Separately, we've written guides for important tasks such as **TELEOP**, **RECORDING DATA**, and **TRAINING**, all available to read in the `docs/` subfolder, if desired.
+
+## Important Notes
+
+* **Connecting to the Jetson:** working on the Alohamini almost always requires that we start a specific host process (see guides). To do so, we connect to Alohamini's Jetson Orin Nano via SSH, typically wirelessly over Eduroam. You should be able to find the credentials in our Discord, but if not, please ask! We *highly recommend* using extension(s) in VS Code (or your editor of choice) to set up a one-click profile for reuse.
+* **Shared Google Workspace:** our shared Google Drive can be accessed [here](https://drive.google.com/drive/folders/1H31gOL2ykyDkuMSXI1YodYHdKjC_M-xH). (Save the link!)
+
 
 ## Troubleshooting
 
 See the following docs:
-* [`docs/STARTUP_GUIDE.md`](setup_docs/STARTUP_GUIDE.md#troubleshooting) - Docker issues
-* [`docs/DEPLOYMENT_GUIDE.md`](setup_docs/DEPLOYMENT_GUIDE.md#troubleshooting) - Hardware issues
-
-
-## AlohaMini Startup
-
-To operate the physical robot, do the following **IN THE CONTAINER ON THE JETSON**:
-1. Start the host server using `./scripts/host.sh`
-
-*Reminder: **YOU** are the **CLIENT** and the **ROBOT** is the **HOST.***
-
-## Teleop Setup
-
-![alohamini teleop setup](./media/teleop_setup.jpg)
-
-Step by step:
-1. Gather the **leader arms**, **two clamps *each***, two USB-C -> USB-C cables, and two **5V adapters** (one per arm).
-2. Set up according to the image above, noting that the leader arm with the **green** label is on the **left** and that with the **red** label is on the **right**. Connect the SCServo controller board on the back of each leader arm to 5V power, and separately through USB to your local machine.
-3. Expose leader arm USB ports to Docker (varies by device, necessary since docker tries to isolate from the system):
-   * **Windows:** if using Docker w/ WSL2 (recommended), install some tool such as [usbipd](https://github.com/dorssel/usbipd-win) that can attach COM ports to WSL. In our experience, the devices typically appear as `/dev/ttyACM0` and `/dev/ttyACM1`.
-   * **Linux & MacOS:**
-   * Open a new terminal window:
-     ```
-     git clone https://github.com/jiegec/usbip
-     cd usbip
-     env RUST_LOG=info cargo run --example host
-     ```
-    * Open a new terminal window:
-    * join the docker `sudo run.sh`
-    ```
-     nsenter -t 1 -m
-     usbip list -r host.docker.internal
-     ```
-    * You get:
-    ```
-    Exportable USB devices
-    ======================
-     - host.docker.internal
-          0-0-0: unknown vendor : unknown product (0000:0000)
-               : /sys/bus/0/0/0
-               : (Defined at Interface level) (00/00/00)
-               :  0 - unknown class / unknown subclass / unknown protocol (03/00/00)
-    ```
-    * attach every number ex:
-    ```
-    usbip attach -r host.docker.internal -d 0-0-0
-    ```
-    * ls /dev and check for ttyACM0 and ttyACM1
-4. Enter the Docker container on your **local machine**, and *inside* run `./scripts/teleop.sh` (use `--help` to see all options).
+* [`docs/DEPLOYMENT_GUIDE.md`](docs/DEPLOYMENT_GUIDE.md#troubleshooting) - Hardware issues
+* [`docs/STARTUP_GUIDE.md`](docs/STARTUP_GUIDE.md#troubleshooting) - Docker issues
