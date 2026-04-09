@@ -53,7 +53,13 @@ You should now be all set!
 
 ## Onboarding
 
-In order to get up to speed, please read any & all research material available in our [shared Google Drive](https://drive.google.com/drive/folders/1nRqpTXZkhCgcrnd-XB8d54YkAPep3cdM). Separately, we've written guides for important tasks such as **TELEOP**, **RECORDING DATA**, and **TRAINING**, all available to read in the `docs/` subfolder, if desired.
+In order to get up to speed, please read any & all research material available in our [shared Google Drive](https://drive.google.com/drive/folders/1nRqpTXZkhCgcrnd-XB8d54YkAPep3cdM). Separately, we've written guides acessible in the `docs/` subfolder, if desired.
+
+* **Teleoperation:** [`docs/TELEOP.md`]
+* **Recording data:** [`docs/RECORD.md`]
+* **Training policies:** [`docs/TRAIN.md`]
+* **π0.5:** [`docs/PI0.5.md`]
+
 
 ## Important Notes
 
