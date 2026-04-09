@@ -1,9 +1,6 @@
 # WiscoHumanoids AlohaMini
 
 
-
-
-
 ## Directory Structure
 
 Since this is a fork of a fork of an open-source repo, it's a fair bit messy. Overall structure for our purposes is as follows:
