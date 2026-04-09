@@ -126,6 +126,12 @@ def main():
             
             last_observation = robot.get_observation()
 
+            # Attach a monotonic timestamp so the client can detect stale observations.
+            # This clock is local to the Jetson; the client uses its own clock to measure
+            # time-since-last-new-message, but including the host timestamp lets us detect
+            # host-side stalls (e.g. consecutive observations with near-identical timestamps).
+            last_observation["__timestamp__"] = time.monotonic()
+
             # Encode ndarrays to base64 strings
             for cam_key, _ in robot.cameras.items():
                 ret, buffer = cv2.imencode(
