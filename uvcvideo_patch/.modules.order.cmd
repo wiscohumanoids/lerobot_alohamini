@@ -1,1 +1,0 @@
-cmd_/home/badger/lerobot_alohamini/uvcvideo_patch/modules.order := {   echo /home/badger/lerobot_alohamini/uvcvideo_patch/uvcvideo.ko; :; } | awk '!x[$$0]++' - > /home/badger/lerobot_alohamini/uvcvideo_patch/modules.order

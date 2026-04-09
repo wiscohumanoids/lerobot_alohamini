@@ -1,5 +1,5 @@
 .safetensors
-
+datasets/
 
 ### Environments & Dependencies ###
 .env

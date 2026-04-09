@@ -1,1 +1,0 @@
-cmd_/home/badger/lerobot_alohamini/uvcvideo_patch/Module.symvers := sed 's/\.ko$$/\.o/' /home/badger/lerobot_alohamini/uvcvideo_patch/modules.order | scripts/mod/modpost -m   -o /home/badger/lerobot_alohamini/uvcvideo_patch/Module.symvers -e -i Module.symvers   -T -

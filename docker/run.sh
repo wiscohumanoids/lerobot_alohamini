@@ -70,7 +70,7 @@ DOCKER_ARGS=(
     -v "$XDG_RUNTIME_DIR:$XDG_RUNTIME_DIR"
     --privileged
     -v /dev/bus/usb:/dev/bus/usb
-    -v "${SCRIPT_DIR}/../checkpoints:/root/.cache/huggingface/"
+    -v "${SCRIPT_DIR}/../datasets:/root/.cache/huggingface/"
     -v "${SCRIPT_DIR}/../calibration/leader:/root/.cache/huggingface/lerobot/calibration/teleoperators/so_leader"
     -v "${SCRIPT_DIR}/../calibration/robot:/root/.cache/huggingface/lerobot/calibration/robots/lekiwi"
     -v "${SCRIPT_DIR}/../calibration/robot:/root/.cache/huggingface/lerobot/calibration/robots/lekiwi_client"

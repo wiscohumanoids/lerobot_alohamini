@@ -1,1 +1,0 @@
-cmd_/home/badger/lerobot_alohamini/uvcvideo_patch/uvcvideo.ko := ld -r -EL  -maarch64elf -z noexecstack --build-id=sha1  -T scripts/module.lds -o /home/badger/lerobot_alohamini/uvcvideo_patch/uvcvideo.ko /home/badger/lerobot_alohamini/uvcvideo_patch/uvcvideo.o /home/badger/lerobot_alohamini/uvcvideo_patch/uvcvideo.mod.o;  true
