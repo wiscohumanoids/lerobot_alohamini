@@ -50,7 +50,7 @@ def save_episode_with_live_preview(
         if display_data:
             observation = robot.get_observation()
             observation_processed = robot_observation_processor(observation)
-            log_rerun_data(observation=observation_processed, action=None)
+            log_rerun_data(observation=observation_processed, action=None, compress_images=True)
 
         dt_s = time.perf_counter() - loop_start
         sleep_s = max(1.0 / fps - dt_s, 0.0)
@@ -170,7 +170,7 @@ def main():
             if display_data:
                 observation = robot.get_observation()
                 observation_processed = robot_observation_processor(observation)
-                log_rerun_data(observation=observation_processed, action=None)
+                log_rerun_data(observation=observation_processed, action=None, compress_images=True)
             dt_s = time.perf_counter() - loop_start
             sleep_s = max(1.0 / args.fps - dt_s, 0.0)
             time.sleep(sleep_s)
@@ -191,6 +191,7 @@ def main():
             control_time_s=args.episode_time,
             single_task=args.task_description,
             display_data=not args.disable_rerun,
+            display_compressed_images=True,
             teleop_action_processor=teleop_action_processor,
             robot_action_processor=robot_action_processor,
             robot_observation_processor=robot_observation_processor,
@@ -209,6 +210,7 @@ def main():
                 control_time_s=args.reset_time,
                 single_task=args.task_description,
                 display_data=not args.disable_rerun,
+                display_compressed_images=True,
                 teleop_action_processor=teleop_action_processor,
                 robot_action_processor=robot_action_processor,
                 robot_observation_processor=robot_observation_processor,
