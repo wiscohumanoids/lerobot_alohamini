@@ -3,6 +3,11 @@
 from email import parser
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.datasets.utils import hw_to_dataset_features
+from lerobot.examples.alohamini.episode_validator import (
+    EpisodeReport,
+    summarize,
+    validate_episode,
+)
 from lerobot.processor import make_default_processors
 from lerobot.robots.alohamini.config_lekiwi import LeKiwiClientConfig
 from lerobot.robots.alohamini.lekiwi_client import LeKiwiClient
@@ -124,8 +129,15 @@ def main():
     parser.add_argument("--keyboard", action="store_true", default=False, help="Enable keyboard teleop for base/lift control")
     parser.add_argument("--setup_time", type=int, default=15, help="Initial setup time in seconds before first episode")
     parser.add_argument("--resume", action="store_true", help="Resume recording on existing dataset")
+    parser.add_argument(
+        "--skip_validation",
+        action="store_true",
+        help="Skip per-episode data quality validation before save_episode.",
+    )
 
     args = parser.parse_args()
+
+    episode_reports: list[EpisodeReport] = []
 
     # === Robot and teleop config ===
     robot_config = LeKiwiClientConfig(remote_ip=args.remote_ip, id=args.robot_id, no_keyboard=not args.keyboard)
@@ -258,6 +270,23 @@ def main():
                 dataset.clear_episode_buffer()
                 continue
 
+            # === Episode data quality validation ===
+            # Run validation against the in-memory buffer *before* save_episode so
+            # we can flag bad demos and let the operator decide whether to keep them.
+            if not args.skip_validation and dataset.episode_buffer is not None:
+                report = validate_episode(
+                    episode_buffer=dataset.episode_buffer,
+                    features=dataset.features,
+                    fps=args.fps,
+                )
+                episode_reports.append(report)
+                if not report.passed:
+                    log_say(
+                        f"Episode {recorded_episodes + 1} failed validation: "
+                        f"{len(report.issues)} issue(s). Saving anyway."
+                    )
+                print(report.format())
+
             save_episode_with_live_preview(
                 dataset=dataset,
                 robot=robot,
@@ -303,6 +332,18 @@ def main():
         log_say("Stop recording")
         listener.stop()
         dataset.finalize()
+
+        # Print final validation summary so the operator sees an aggregate
+        # quality report before the dataset hits HuggingFace Hub.
+        if episode_reports:
+            print(summarize(episode_reports))
+            num_failed = sum(1 for r in episode_reports if not r.passed)
+            if num_failed > 0:
+                log_say(
+                    f"{num_failed} of {len(episode_reports)} episodes failed validation. "
+                    f"The dataset will still be pushed to the Hub."
+                )
+
         dataset.push_to_hub()
 
         try:
