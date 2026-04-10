@@ -1,6 +1,6 @@
 .safetensors
 datasets/
-
+checkpoints/
 ### Environments & Dependencies ###
 .env
 .venv
