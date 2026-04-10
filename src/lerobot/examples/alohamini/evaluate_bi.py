@@ -3,10 +3,18 @@
 import argparse
 import threading
 import time
+from datetime import datetime
+from pathlib import Path
 
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.datasets.utils import hw_to_dataset_features
+from lerobot.examples.alohamini.eval_metrics import (
+    EpisodeMetrics,
+    append_to_csv,
+    compute_episode_metrics,
+    summarize,
+)
 from lerobot.policies.factory import get_policy_class, make_pre_post_processors
 from lerobot.processor import make_default_processors
 from lerobot.robots.alohamini import LeKiwiClient, LeKiwiClientConfig
@@ -103,8 +111,24 @@ def main():
         action="store_true",
         help="Disable rerun visualization to avoid native viewer crashes on macOS.",
     )
+    parser.add_argument(
+        "--metrics_csv",
+        type=str,
+        default="eval_metrics.csv",
+        help="Path to a CSV file where per-episode metrics are appended. "
+        "Pass an empty string to disable CSV logging.",
+    )
+    parser.add_argument(
+        "--run_id",
+        type=str,
+        default="",
+        help="Identifier for this eval run (defaults to a UTC timestamp).",
+    )
 
     args = parser.parse_args()
+
+    run_id = args.run_id or datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    episode_metrics: list[EpisodeMetrics] = []
 
     # === Robot config ===
     robot_config = LeKiwiClientConfig(remote_ip=args.remote_ip, id=args.robot_id)
@@ -181,6 +205,19 @@ def main():
         )
 
         if not events["stop_recording"]:
+            # Compute eval metrics from the in-memory buffer before save_episode
+            # clears it. This gives us a per-episode quality / smoothness signal
+            # that we can compare across training runs.
+            if dataset.episode_buffer is not None:
+                metrics = compute_episode_metrics(
+                    episode_buffer=dataset.episode_buffer,
+                    features=dataset.features,
+                    fps=args.fps,
+                )
+                if metrics is not None:
+                    episode_metrics.append(metrics)
+                    print(metrics.format())
+
             run_task_with_live_preview(
                 task=dataset.save_episode,
                 robot=robot,
@@ -209,6 +246,21 @@ def main():
         display_data=display_data,
         robot_observation_processor=robot_observation_processor,
     )
+
+    # Print + persist the eval metrics summary before pushing the dataset.
+    if episode_metrics:
+        print(summarize(episode_metrics))
+        if args.metrics_csv:
+            csv_path = Path(args.metrics_csv)
+            append_to_csv(
+                csv_path,
+                episode_metrics,
+                run_id=run_id,
+                model_id=args.hf_model_id,
+                dataset_id=args.hf_dataset_id,
+            )
+            print(f"Eval metrics appended to {csv_path}")
+
     run_task_with_live_preview(
         task=dataset.push_to_hub,
         robot=robot,
