@@ -27,11 +27,12 @@ def get_bi_teleop_action(
     robot: LeKiwiClient,
     leader_arm: BiSOLeader,
     keyboard: KeyboardTeleop,
+    no_keyboard: bool = True,
 ) -> dict[str, float]:
     """Collect the current bi-arm and keyboard teleop command."""
     arm_action = leader_arm.get_action()
     arm_action = {f"arm_{k}": v for k, v in arm_action.items()}
-    keyboard_action = keyboard.get_action()
+    keyboard_action = keyboard.get_action() if not no_keyboard else {}
     base_action = robot._from_keyboard_to_base_action(keyboard_action)
     lift_action = robot._from_keyboard_to_lift_action(keyboard_action)
     return {**arm_action, **base_action, **lift_action}
@@ -47,6 +48,7 @@ def save_episode_with_live_preview(
     teleop_action_processor,
     robot_action_processor,
     robot_observation_processor,
+    no_keyboard: bool = True,
 ) -> None:
     """Save episode while continuously updating rerun camera preview."""
     save_done = threading.Event()
@@ -66,7 +68,7 @@ def save_episode_with_live_preview(
     while not save_done.is_set():
         loop_start = time.perf_counter()
         observation = robot.get_observation()
-        teleop_action = get_bi_teleop_action(robot, leader_arm, keyboard)
+        teleop_action = get_bi_teleop_action(robot, leader_arm, keyboard, no_keyboard=no_keyboard)
         teleop_action_processed = teleop_action_processor((teleop_action, observation))
         robot_action = robot_action_processor((teleop_action_processed, observation))
         robot.send_action(robot_action)
@@ -119,13 +121,14 @@ def main():
         help="Disable rerun visualization to avoid native viewer crashes on macOS.",
     )
     parser.add_argument("--rerun_port", type=int, default=9091, help="Port of the running rerun web-viewer")
+    parser.add_argument("--no_keyboard", action="store_true", default=True, help="Disable keyboard teleop for base/lift control")
     parser.add_argument("--setup_time", type=int, default=15, help="Initial setup time in seconds before first episode")
     parser.add_argument("--resume", action="store_true", help="Resume recording on existing dataset")
 
     args = parser.parse_args()
 
     # === Robot and teleop config ===
-    robot_config = LeKiwiClientConfig(remote_ip=args.remote_ip, id=args.robot_id)
+    robot_config = LeKiwiClientConfig(remote_ip=args.remote_ip, id=args.robot_id, no_keyboard=args.no_keyboard)
     leader_arm_config = BiSOLeaderConfig(
         left_arm_config=SOLeaderConfig(
             port="/dev/cu.usbmodem5B140323471",
@@ -238,8 +241,8 @@ def main():
                     robot=robot,
                     events=events,
                     fps=args.fps,
-                    teleop=[leader_arm, keyboard],
-                    control_time_s=args.reset_time,
+                teleop=[leader_arm, keyboard],
+                control_time_s=args.reset_time,
                     single_task=args.task_description,
                     display_data=not args.disable_rerun,
                     display_compressed_images=True,
@@ -265,6 +268,7 @@ def main():
                 teleop_action_processor=teleop_action_processor,
                 robot_action_processor=robot_action_processor,
                 robot_observation_processor=robot_observation_processor,
+                no_keyboard=args.no_keyboard,
             )
             recorded_episodes += 1
 
@@ -283,6 +287,7 @@ def main():
                 teleop_action_processor=teleop_action_processor,
                 robot_action_processor=robot_action_processor,
                 robot_observation_processor=robot_observation_processor,
+                no_keyboard=args.no_keyboard,
             )
             recorded_episodes += 1
 

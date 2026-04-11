@@ -120,6 +120,8 @@ class LeKiwiClientConfig(RobotConfig):
         }
     )
 
+    no_keyboard: bool = True
+
     cameras: dict[str, CameraConfig] = field(default_factory=lekiwi_cameras_config)
 
     polling_timeout_ms: int = 15

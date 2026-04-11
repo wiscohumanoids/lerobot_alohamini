@@ -295,6 +295,8 @@ class LeKiwiClient(Robot):
         return obs_dict
 
     def _from_keyboard_to_base_action(self, pressed_keys: np.ndarray):
+        if self.config.no_keyboard:
+            return {"x.vel": 0.0, "y.vel": 0.0, "theta.vel": 0.0}
         # Speed control
         if self.teleop_keys["speed_up"] in pressed_keys:
             self.speed_index = min(self.speed_index + 1, 2)
@@ -345,6 +347,9 @@ class LeKiwiClient(Robot):
 
     # lift_axis.height_mm
     def _from_keyboard_to_lift_action(self, pressed_keys: np.ndarray):
+        if self.config.no_keyboard:
+            h_now = float(self.last_remote_state.get("lift_axis.height_mm", 0.0))
+            return {"lift_axis.height_mm": h_now}
         up_pressed = self.teleop_keys.get("lift_up", "u") in pressed_keys
         dn_pressed = self.teleop_keys.get("lift_down", "j") in pressed_keys
         now_pressed = up_pressed or dn_pressed
