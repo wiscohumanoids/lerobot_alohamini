@@ -4,4 +4,4 @@
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 
 # Execute Python script with passed arguments
-python3 "$SCRIPT_DIR/../../src/utils/teleoperate.py" "$@"
+python3 "$SCRIPT_DIR/../src/utils/teleoperate.py" "$@"

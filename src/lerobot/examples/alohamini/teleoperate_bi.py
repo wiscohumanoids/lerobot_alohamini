@@ -15,8 +15,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--no_robot", action="store_true", help="Do not connect robot, only print actions")
 parser.add_argument("--no_leader", action="store_true", help="Do not connect leader arm, only perform keyboard-controlled actions.")
 parser.add_argument("--fps", type=int, default=30, help="Main loop frequency (frames per second)")
-parser.add_argument("--remote_ip", type=str, default="192.168.55.1", help="LeKiwi host IP address")
+parser.add_argument("--remote_ip", type=str, default="10.139.203.203", help="LeKiwi host IP address")
 parser.add_argument("--leader_id", type=str, default="so101_leader_bi", help="Leader arm device ID")
+parser.add_argument("--use_rerun", action="store_true", default=False, help="Enable rerun teleop vis")
 parser.add_argument(
     "--arm_profile",
     type=str,
@@ -27,6 +28,7 @@ parser.add_argument(
 
 args = parser.parse_args()
 
+USE_RERUN = args.use_rerun
 NO_ROBOT = args.no_robot
 NO_LEADER = args.no_leader
 FPS = args.fps
@@ -41,11 +43,11 @@ if NO_LEADER:
 robot_config = LeKiwiClientConfig(remote_ip=args.remote_ip, id="my_alohamini")
 bi_cfg = BiSOLeaderConfig(
     left_arm_config=SOLeaderConfig(
-        port="/dev/cu.usbmodem5B140323471",  # Change this
+        port="/dev/ttyACM0",
         arm_profile=args.arm_profile,
     ),
     right_arm_config=SOLeaderConfig(
-        port="/dev/cu.usbmodem5B140330511",  # Change this
+        port="/dev/ttyACM1",
         arm_profile=args.arm_profile,
     ),
     id=args.leader_id,
@@ -72,7 +74,9 @@ keyboard.connect()
 
 os.environ["LEROBOT_RERUN_MEMORY_LIMIT"] = "0%"   # no history kept in viewer memory
 os.environ["RERUN_FLUSH_NUM_BYTES"] = "0"           # flush every log call immediately
-init_rerun(session_name="lekiwi_teleop")
+
+if USE_RERUN:
+    init_rerun(session_name="lekiwi_teleop")
 
 if not robot.is_connected or not leader.is_connected or not keyboard.is_connected:
     print("⚠️ Warning: Some devices are not connected! Still running for debug.")
