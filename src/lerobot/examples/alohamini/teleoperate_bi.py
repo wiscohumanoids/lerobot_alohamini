@@ -17,7 +17,8 @@ parser.add_argument("--no_leader", action="store_true", help="Do not connect lea
 parser.add_argument("--fps", type=int, default=30, help="Main loop frequency (frames per second)")
 parser.add_argument("--remote_ip", type=str, default="10.139.203.203", help="LeKiwi host IP address")
 parser.add_argument("--leader_id", type=str, default="so101_leader_bi", help="Leader arm device ID")
-parser.add_argument("--use_rerun", action="store_true", default=False, help="Enable rerun teleop vis")
+parser.add_argument("--use_rerun", action="store_true", default=True, help="Enable rerun teleop vis")
+parser.add_argument("--rerun_port", type=int, default=9091, help="Port of the running rerun web-viewer")
 parser.add_argument(
     "--arm_profile",
     type=str,
@@ -76,7 +77,7 @@ os.environ["LEROBOT_RERUN_MEMORY_LIMIT"] = "0%"   # no history kept in viewer me
 os.environ["RERUN_FLUSH_NUM_BYTES"] = "0"           # flush every log call immediately
 
 if USE_RERUN:
-    init_rerun(session_name="lekiwi_teleop")
+    init_rerun(session_name="lekiwi_teleop", ip="localhost", port=args.rerun_port)
 
 if not robot.is_connected or not leader.is_connected or not keyboard.is_connected:
     print("⚠️ Warning: Some devices are not connected! Still running for debug.")

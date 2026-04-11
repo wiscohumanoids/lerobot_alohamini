@@ -118,6 +118,7 @@ def main():
         action="store_true",
         help="Disable rerun visualization to avoid native viewer crashes on macOS.",
     )
+    parser.add_argument("--rerun_port", type=int, default=9091, help="Port of the running rerun web-viewer")
     parser.add_argument("--setup_time", type=int, default=15, help="Initial setup time in seconds before first episode")
     parser.add_argument("--resume", action="store_true", help="Resume recording on existing dataset")
 
@@ -180,7 +181,7 @@ def main():
         import os
         os.environ["LEROBOT_RERUN_MEMORY_LIMIT"] = "0%"   # no history kept in viewer memory
         os.environ["RERUN_FLUSH_NUM_BYTES"] = "0"           # flush every log call immediately
-        init_rerun(session_name="lekiwi_record")
+        init_rerun(session_name="lekiwi_record", ip="localhost", port=args.rerun_port)
 
     if not robot.is_connected or not leader_arm.is_connected or not keyboard.is_connected:
         raise ValueError("Robot or teleop is not connected!")
