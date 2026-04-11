@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import threading
 import time
 
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
@@ -14,26 +15,76 @@ from lerobot.utils.constants import ACTION, OBS_STR
 from lerobot.utils.control_utils import init_keyboard_listener
 from lerobot.utils.robot_utils import precise_sleep
 from lerobot.utils.utils import log_say
-from lerobot.utils.visualization_utils import init_rerun
+from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
 
 
-def wait_for_reset(robot: LeKiwiClient, events: dict, reset_time_s: int) -> None:
+def log_live_preview_frame(robot: LeKiwiClient, robot_observation_processor) -> None:
+    observation = robot.get_observation()
+    observation_processed = robot_observation_processor(observation)
+    log_rerun_data(observation=observation_processed, action=None, compress_images=True)
+
+
+def run_task_with_live_preview(
+    task,
+    robot: LeKiwiClient,
+    fps: int,
+    display_data: bool,
+    robot_observation_processor,
+) -> None:
+    task_done = threading.Event()
+    task_error = {"exception": None}
+
+    def _run_task() -> None:
+        try:
+            task()
+        except Exception as exc:
+            task_error["exception"] = exc
+        finally:
+            task_done.set()
+
+    task_thread = threading.Thread(target=_run_task, daemon=True)
+    task_thread.start()
+
+    while not task_done.is_set():
+        loop_start = time.perf_counter()
+        if display_data:
+            log_live_preview_frame(robot, robot_observation_processor)
+
+        dt_s = time.perf_counter() - loop_start
+        sleep_s = max(1.0 / fps - dt_s, 0.0)
+        task_done.wait(timeout=sleep_s)
+
+    task_thread.join()
+    if task_error["exception"] is not None:
+        raise task_error["exception"]
+
+
+def wait_for_reset(
+    robot: LeKiwiClient,
+    events: dict,
+    reset_time_s: int,
+    fps: int,
+    display_data: bool,
+    robot_observation_processor,
+) -> None:
     if reset_time_s <= 0:
         return
 
     log_say(f"Reset the environment. Waiting {reset_time_s} seconds before the next episode.")
-    robot.disable_arm_torque()
-    try:
-        end_time = time.perf_counter() + reset_time_s
+    end_time = time.perf_counter() + reset_time_s
 
-        while time.perf_counter() < end_time:
-            if events["stop_recording"] or events["exit_early"]:
-                events["exit_early"] = False
-                break
+    while time.perf_counter() < end_time:
+        if events["stop_recording"] or events["exit_early"]:
+            events["exit_early"] = False
+            break
 
-            precise_sleep(min(0.1, end_time - time.perf_counter()))
-    finally:
-        robot.enable_arm_torque()
+        loop_start = time.perf_counter()
+        if display_data:
+            log_live_preview_frame(robot, robot_observation_processor)
+
+        remaining_s = end_time - time.perf_counter()
+        dt_s = time.perf_counter() - loop_start
+        precise_sleep(min(max(1.0 / fps - dt_s, 0.0), max(remaining_s, 0.0)))
 
 
 def main():
@@ -47,6 +98,11 @@ def main():
     parser.add_argument("--hf_dataset_id", type=str, required=True, help="HuggingFace dataset repo id")
     parser.add_argument("--remote_ip", type=str, default="127.0.0.1", help="LeKiwi host IP address")
     parser.add_argument("--robot_id", type=str, default="lekiwi", help="Robot ID")
+    parser.add_argument(
+        "--disable_rerun",
+        action="store_true",
+        help="Disable rerun visualization to avoid native viewer crashes on macOS.",
+    )
 
     args = parser.parse_args()
 
@@ -82,7 +138,9 @@ def main():
 
     teleop_action_processor, robot_action_processor, robot_observation_processor = make_default_processors()
     listener, events = init_keyboard_listener()
-    init_rerun(session_name="lekiwi_evaluate")
+    display_data = not args.disable_rerun
+    if display_data:
+        init_rerun(session_name="lekiwi_evaluate", ip="127.0.0.1", port=9091)
 
     if not robot.is_connected:
         raise ValueError("Robot is not connected!")
@@ -103,25 +161,50 @@ def main():
             dataset=dataset,
             control_time_s=args.episode_time,
             single_task=args.task_description,
-            display_data=True,
+            display_data=display_data,
+            display_compressed_images=True,
             teleop_action_processor=teleop_action_processor,
             robot_action_processor=robot_action_processor,
             robot_observation_processor=robot_observation_processor,
         )
 
         if not events["stop_recording"]:
-            dataset.save_episode()
+            run_task_with_live_preview(
+                task=dataset.save_episode,
+                robot=robot,
+                fps=args.fps,
+                display_data=display_data,
+                robot_observation_processor=robot_observation_processor,
+            )
             recorded_episodes += 1
 
             if recorded_episodes < args.num_episodes:
-                wait_for_reset(robot, events, args.reset_time)
+                wait_for_reset(
+                    robot=robot,
+                    events=events,
+                    reset_time_s=args.reset_time,
+                    fps=args.fps,
+                    display_data=display_data,
+                    robot_observation_processor=robot_observation_processor,
+                )
 
     log_say("Stop recording")
-    robot.disable_arm_torque()
-    robot.disconnect()
     listener.stop()
-    dataset.finalize()
-    dataset.push_to_hub()
+    run_task_with_live_preview(
+        task=dataset.finalize,
+        robot=robot,
+        fps=args.fps,
+        display_data=display_data,
+        robot_observation_processor=robot_observation_processor,
+    )
+    run_task_with_live_preview(
+        task=dataset.push_to_hub,
+        robot=robot,
+        fps=args.fps,
+        display_data=display_data,
+        robot_observation_processor=robot_observation_processor,
+    )
+    robot.disconnect()
 
 
 if __name__ == "__main__":
