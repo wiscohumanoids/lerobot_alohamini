@@ -14,7 +14,7 @@ from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
 parser = argparse.ArgumentParser()
 parser.add_argument("--no_robot", action="store_true", help="Do not connect robot, only print actions")
 parser.add_argument("--no_leader", action="store_true", help="Do not connect leader arm, only perform keyboard-controlled actions.")
-parser.add_argument("--no_keyboard", action="store_true", default=True, help="Disable keyboard teleop for base/lift control")
+parser.add_argument("--keyboard", action="store_true", default=False, help="Enable keyboard teleop for base/lift control")
 parser.add_argument("--fps", type=int, default=30, help="Main loop frequency (frames per second)")
 parser.add_argument("--remote_ip", type=str, default="10.139.203.203", help="LeKiwi host IP address")
 parser.add_argument("--leader_id", type=str, default="so101_leader_bi", help="Leader arm device ID")
@@ -33,7 +33,7 @@ args = parser.parse_args()
 USE_RERUN = args.use_rerun
 NO_ROBOT = args.no_robot
 NO_LEADER = args.no_leader
-NO_KEYBOARD = args.no_keyboard
+NO_KEYBOARD = not args.keyboard
 FPS = args.fps
 # ========================================== #
 
@@ -43,7 +43,7 @@ if NO_ROBOT:
 if NO_LEADER:
     print("🧪 NO_LEADER mode enabled: leader arm will not connect, only print actions.")
 # Create configs
-robot_config = LeKiwiClientConfig(remote_ip=args.remote_ip, id="my_alohamini", no_keyboard=args.no_keyboard)
+robot_config = LeKiwiClientConfig(remote_ip=args.remote_ip, id="my_alohamini", no_keyboard=NO_KEYBOARD)
 bi_cfg = BiSOLeaderConfig(
     left_arm_config=SOLeaderConfig(
         port="/dev/cu.usbmodem5B140323471",
