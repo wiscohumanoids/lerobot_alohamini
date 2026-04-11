@@ -70,6 +70,8 @@ keyboard.connect()
 
 
 
+os.environ["LEROBOT_RERUN_MEMORY_LIMIT"] = "0%"   # no history kept in viewer memory
+os.environ["RERUN_FLUSH_NUM_BYTES"] = "0"           # flush every log call immediately
 init_rerun(session_name="lekiwi_teleop")
 
 if not robot.is_connected or not leader.is_connected or not keyboard.is_connected:
@@ -87,7 +89,7 @@ while True:
     lift_action = robot._from_keyboard_to_lift_action(keyboard_keys)
 
     action = {**arm_actions, **base_action, **lift_action}
-    log_rerun_data(observation, action)
+    log_rerun_data(observation, action, compress_images=True)
 
     if not NO_ROBOT:
         robot.send_action(action)
