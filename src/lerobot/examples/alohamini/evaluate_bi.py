@@ -4,10 +4,10 @@ import argparse
 import threading
 import time
 
+from lerobot.configs.policies import PreTrainedConfig
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.datasets.utils import hw_to_dataset_features
-from lerobot.policies.act.modeling_act import ACTPolicy
-from lerobot.policies.factory import make_pre_post_processors
+from lerobot.policies.factory import get_policy_class, make_pre_post_processors
 from lerobot.processor import make_default_processors
 from lerobot.robots.alohamini import LeKiwiClient, LeKiwiClientConfig
 from lerobot.scripts.lerobot_record import record_loop
@@ -112,7 +112,19 @@ def main():
     robot.connect()
 
     # === Policy ===
-    policy = ACTPolicy.from_pretrained(args.hf_model_id)
+    policy_config = PreTrainedConfig.from_pretrained(args.hf_model_id)
+    policy_class = get_policy_class(policy_config.type)
+    if policy_config.use_peft:
+        from peft import PeftConfig, PeftModel  # type: ignore[reportMissingImports]
+
+        peft_config = PeftConfig.from_pretrained(args.hf_model_id)
+        policy = policy_class.from_pretrained(
+            pretrained_name_or_path=peft_config.base_model_name_or_path,
+            config=policy_config,
+        )
+        policy = PeftModel.from_pretrained(policy, args.hf_model_id, config=peft_config)
+    else:
+        policy = policy_class.from_pretrained(args.hf_model_id, config=policy_config)
 
     # === Dataset features ===
     action_features = hw_to_dataset_features(robot.action_features, ACTION)
@@ -130,7 +142,7 @@ def main():
 
     # === Policy Processors ===
     preprocessor, postprocessor = make_pre_post_processors(
-        policy_cfg=policy,
+        policy_cfg=policy.config,
         pretrained_path=args.hf_model_id,
         dataset_stats=dataset.meta.stats,
         preprocessor_overrides={"device_processor": {"device": str(policy.config.device)}},
