@@ -13,8 +13,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import shutil
 from pathlib import Path
 
+import torch
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 
@@ -59,7 +61,121 @@ def update_last_checkpoint(checkpoint_dir: Path) -> Path:
     if last_checkpoint_dir.is_symlink():
         last_checkpoint_dir.unlink()
     relative_target = checkpoint_dir.relative_to(checkpoint_dir.parent)
-    last_checkpoint_dir.symlink_to(relative_target)
+    last_checkpoint_dir.symlink_to(relative_target, target_is_directory=True)
+
+
+def get_checkpoint_dirs(checkpoints_dir: Path) -> list[Path]:
+    if not checkpoints_dir.exists():
+        return []
+    return sorted(path for path in checkpoints_dir.iterdir() if path.is_dir() and path.name.isdigit())
+
+
+def prune_old_checkpoints(checkpoints_dir: Path, keep_last: int) -> list[Path]:
+    if keep_last < 1:
+        raise ValueError(f"{keep_last=} must be >= 1")
+
+    checkpoint_dirs = get_checkpoint_dirs(checkpoints_dir)
+    to_delete = checkpoint_dirs[:-keep_last]
+    for checkpoint_dir in to_delete:
+        shutil.rmtree(checkpoint_dir)
+    return to_delete
+
+
+def _tensor_nbytes(value) -> int:
+    return value.numel() * value.element_size() if isinstance(value, torch.Tensor) else 0
+
+
+def _nested_tensors_nbytes(value) -> int:
+    if isinstance(value, torch.Tensor):
+        return _tensor_nbytes(value)
+    if isinstance(value, dict):
+        return sum(_nested_tensors_nbytes(v) for v in value.values())
+    if isinstance(value, (list, tuple)):
+        return sum(_nested_tensors_nbytes(v) for v in value)
+    return 0
+
+
+def _estimate_optimizer_state_bytes(
+    optimizer: Optimizer | dict[str, Optimizer], fallback_model_bytes: int
+) -> int:
+    if isinstance(optimizer, dict):
+        return sum(_estimate_optimizer_state_bytes(opt, fallback_model_bytes) for opt in optimizer.values())
+
+    state_bytes = _nested_tensors_nbytes(optimizer.state_dict())
+    if state_bytes > 0:
+        return state_bytes
+
+    # Before the first optimizer step, Adam-like optimizers have no tensor state yet.
+    return fallback_model_bytes * 2
+
+
+def estimate_checkpoint_size_bytes(
+    policy: PreTrainedPolicy, optimizer: Optimizer | dict[str, Optimizer]
+) -> int:
+    model_bytes = _nested_tensors_nbytes(policy.state_dict())
+    optimizer_bytes = _estimate_optimizer_state_bytes(optimizer, model_bytes)
+    # JSON/config/RNG/processor state is small compared to model + optimizer, but keep some buffer.
+    return model_bytes + optimizer_bytes + 256 * 1024**2
+
+
+def get_checkpoint_size_bytes(checkpoint_dir: Path) -> int:
+    return sum(path.stat().st_size for path in checkpoint_dir.rglob("*") if path.is_file())
+
+
+def _format_gb(size_bytes: int) -> str:
+    return f"{size_bytes / 1024**3:.2f} GB"
+
+
+def ensure_last_checkpoint_symlink_supported(checkpoints_dir: Path) -> None:
+    test_root = checkpoints_dir / ".checkpoint_symlink_test"
+    target_dir = test_root / "target"
+    link_dir = test_root / "link"
+
+    if test_root.exists():
+        shutil.rmtree(test_root, ignore_errors=True)
+
+    test_root.mkdir(parents=True, exist_ok=True)
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        link_dir.symlink_to(target_dir.relative_to(test_root), target_is_directory=True)
+    except OSError as exc:
+        raise RuntimeError(
+            "Checkpoint preflight failed: this shell cannot create the `checkpoints/last` symlink. "
+            "On Windows, run the shell as Administrator or enable Developer Mode before training."
+        ) from exc
+    finally:
+        if link_dir.is_symlink():
+            link_dir.unlink()
+        if test_root.exists():
+            shutil.rmtree(test_root, ignore_errors=True)
+
+
+def preflight_checkpointing(
+    output_dir: Path,
+    policy: PreTrainedPolicy,
+    optimizer: Optimizer | dict[str, Optimizer],
+) -> None:
+    checkpoints_dir = output_dir / CHECKPOINTS_DIR
+    checkpoints_dir.mkdir(parents=True, exist_ok=True)
+
+    ensure_last_checkpoint_symlink_supported(checkpoints_dir)
+
+    latest_checkpoint_size = 0
+    checkpoint_dirs = get_checkpoint_dirs(checkpoints_dir)
+    if checkpoint_dirs:
+        latest_checkpoint_size = get_checkpoint_size_bytes(checkpoint_dirs[-1])
+
+    estimated_checkpoint_size = estimate_checkpoint_size_bytes(policy, optimizer)
+    required_free_bytes = max(latest_checkpoint_size, estimated_checkpoint_size)
+    free_bytes = shutil.disk_usage(checkpoints_dir).free
+
+    if free_bytes < required_free_bytes:
+        raise RuntimeError(
+            "Checkpoint preflight failed: not enough free disk space for the next checkpoint. "
+            f"Free: {_format_gb(free_bytes)}. "
+            f"Required: {_format_gb(required_free_bytes)}."
+        )
 
 
 def save_checkpoint(

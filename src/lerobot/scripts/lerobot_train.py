@@ -44,6 +44,8 @@ from lerobot.utils.train_utils import (
     get_step_checkpoint_dir,
     get_step_identifier,
     load_training_state,
+    preflight_checkpointing,
+    prune_old_checkpoints,
     save_checkpoint,
     update_last_checkpoint,
 )
@@ -316,6 +318,13 @@ def train(cfg: TrainPipelineConfig, accelerator: Accelerator | None = None):
     if cfg.resume:
         step, optimizer, lr_scheduler = load_training_state(cfg.checkpoint_path, optimizer, lr_scheduler)
 
+    if cfg.save_checkpoint and is_main_process:
+        preflight_checkpointing(
+            output_dir=cfg.output_dir,
+            policy=accelerator.unwrap_model(policy),
+            optimizer=optimizer,
+        )
+
     num_learnable_params = sum(p.numel() for p in policy.parameters() if p.requires_grad)
     num_total_params = sum(p.numel() for p in policy.parameters())
 
@@ -453,6 +462,7 @@ def train(cfg: TrainPipelineConfig, accelerator: Accelerator | None = None):
                     postprocessor=postprocessor,
                 )
                 update_last_checkpoint(checkpoint_dir)
+                prune_old_checkpoints(checkpoint_dir.parent, keep_last=1)
                 if wandb_logger:
                     wandb_logger.log_policy(checkpoint_dir)
 
