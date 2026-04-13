@@ -92,7 +92,6 @@ class SOLeader(Teleoperator):
             self.calibrate()
 
         self.configure()
-        self._apply_fresh_wrist_roll_homing()
         logger.info(f"{self} connected.")
 
     @property
@@ -116,10 +115,9 @@ class SOLeader(Teleoperator):
             self.bus.write("Operating_Mode", motor, OperatingMode.POSITION.value)
 
         input(f"Move {self} to the middle of its range of motion and press ENTER....")
+        homing_offsets = self.bus.set_half_turn_homings()
+
         full_turn_motor = "wrist_roll"
-        homing_targets = [motor for motor in self.bus.motors if motor != full_turn_motor]
-        homing_offsets = self.bus.set_half_turn_homings(homing_targets)
-        homing_offsets[full_turn_motor] = 0
         unknown_range_motors = [motor for motor in self.bus.motors if motor != full_turn_motor]
         print(
             f"Move all joints except '{full_turn_motor}' sequentially through their "

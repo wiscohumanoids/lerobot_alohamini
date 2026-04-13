@@ -244,7 +244,6 @@ class LeKiwi(Robot):
             cam.connect()
 
         self.configure()
-        self._apply_fresh_wrist_roll_homing()
         logger.info(f"{self} connected.")
 
         self.lift.home()
@@ -286,10 +285,9 @@ class LeKiwi(Robot):
             bus.write("Operating_Mode", name, OperatingMode.POSITION.value)
 
         input(f"Move {arm_label.upper()} arm to the middle of its range of motion, then press ENTER...")
+        homing = bus.set_half_turn_homings(arm_motors)
+
         full_turn_motors = [full_turn_motor] if full_turn_motor in arm_motors else []
-        homing_targets = [m for m in arm_motors if m not in full_turn_motors]
-        homing = bus.set_half_turn_homings(homing_targets)
-        homing.update(dict.fromkeys(full_turn_motors, 0))
         unknown_range_motors = [m for m in arm_motors if m not in full_turn_motors]
 
         print(
