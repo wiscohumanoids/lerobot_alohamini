@@ -43,10 +43,12 @@ bi_cfg = BiSOLeaderConfig(
     left_arm_config=SOLeaderConfig(
         port="/dev/cu.usbmodem5B140323471",  # Change this
         arm_profile=args.arm_profile,
+        use_degrees=True,
     ),
     right_arm_config=SOLeaderConfig(
         port="/dev/cu.usbmodem5B140330511",  # Change this
         arm_profile=args.arm_profile,
+        use_degrees=True,
     ),
     id=args.leader_id,
 )
