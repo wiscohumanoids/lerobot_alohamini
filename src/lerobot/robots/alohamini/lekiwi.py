@@ -284,11 +284,13 @@ class LeKiwi(Robot):
         for name in arm_motors:
             bus.write("Operating_Mode", name, OperatingMode.POSITION.value)
 
-        input(f"Move {arm_label.upper()} arm to the middle of its range of motion, then press ENTER...")
-        homing = bus.set_half_turn_homings(arm_motors)
-
         full_turn_motors = [full_turn_motor] if full_turn_motor in arm_motors else []
         unknown_range_motors = [m for m in arm_motors if m not in full_turn_motors]
+
+        input(f"Move {arm_label.upper()} arm to the middle of its range of motion, then press ENTER...")
+        homing = bus.set_half_turn_homings(unknown_range_motors)
+        for motor_name in full_turn_motors:
+            homing[motor_name] = 0
 
         print(
             f"Move {arm_label.upper()} arm joints sequentially through full ROM "
