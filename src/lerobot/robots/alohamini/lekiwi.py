@@ -68,7 +68,7 @@ class LeKiwi(Robot):
                 "arm_left_elbow_flex": Motor(3, "sts3095", norm_mode_body),
                 "arm_left_wrist_flex": Motor(4, "sts3215", norm_mode_body),
                 "arm_left_wrist_yaw": Motor(5, "sts3215", norm_mode_body),
-                "arm_left_wrist_roll": Motor(6, "sts3215", norm_mode_body),
+                "arm_left_wrist_roll": Motor(6, "sts3215", MotorNormMode.RANGE_M100_100),
                 "arm_left_gripper": Motor(7, "sts3215", MotorNormMode.RANGE_0_100),
             }
             right_arm_motors_cfg = {
@@ -77,7 +77,7 @@ class LeKiwi(Robot):
                 "arm_right_elbow_flex": Motor(3, "sts3095", norm_mode_body),
                 "arm_right_wrist_flex": Motor(4, "sts3215", norm_mode_body),
                 "arm_right_wrist_yaw": Motor(5, "sts3215", norm_mode_body),
-                "arm_right_wrist_roll": Motor(6, "sts3215", norm_mode_body),
+                "arm_right_wrist_roll": Motor(6, "sts3215", MotorNormMode.RANGE_M100_100),
                 "arm_right_gripper": Motor(7, "sts3215", MotorNormMode.RANGE_0_100),
             }
             self._left_arm_state_keys = (
@@ -104,7 +104,7 @@ class LeKiwi(Robot):
                 "arm_left_shoulder_lift": Motor(2, "sts3215", norm_mode_body),
                 "arm_left_elbow_flex": Motor(3, "sts3215", norm_mode_body),
                 "arm_left_wrist_flex": Motor(4, "sts3215", norm_mode_body),
-                "arm_left_wrist_roll": Motor(5, "sts3215", norm_mode_body),
+                "arm_left_wrist_roll": Motor(5, "sts3215", MotorNormMode.RANGE_M100_100),
                 "arm_left_gripper": Motor(6, "sts3215", MotorNormMode.RANGE_0_100),
             }
             right_arm_motors_cfg = {
@@ -112,7 +112,7 @@ class LeKiwi(Robot):
                 "arm_right_shoulder_lift": Motor(2, "sts3215", norm_mode_body),
                 "arm_right_elbow_flex": Motor(3, "sts3215", norm_mode_body),
                 "arm_right_wrist_flex": Motor(4, "sts3215", norm_mode_body),
-                "arm_right_wrist_roll": Motor(5, "sts3215", norm_mode_body),
+                "arm_right_wrist_roll": Motor(5, "sts3215", MotorNormMode.RANGE_M100_100),
                 "arm_right_gripper": Motor(6, "sts3215", MotorNormMode.RANGE_0_100),
             }
             self._left_arm_state_keys = (

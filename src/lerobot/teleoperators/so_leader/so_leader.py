@@ -48,7 +48,7 @@ class SOLeader(Teleoperator):
                 "elbow_flex": Motor(3, "sts3215", norm_mode_body),
                 "wrist_flex": Motor(4, "sts3215", norm_mode_body),
                 "wrist_yaw": Motor(5, "sts3215", norm_mode_body),
-                "wrist_roll": Motor(6, "sts3215", norm_mode_body),
+                "wrist_roll": Motor(6, "sts3215", MotorNormMode.RANGE_M100_100),
                 "gripper": Motor(7, "sts3215", MotorNormMode.RANGE_0_100),
             }
         elif config.arm_profile == "so-arm-5dof":
@@ -57,7 +57,7 @@ class SOLeader(Teleoperator):
                 "shoulder_lift": Motor(2, "sts3215", norm_mode_body),
                 "elbow_flex": Motor(3, "sts3215", norm_mode_body),
                 "wrist_flex": Motor(4, "sts3215", norm_mode_body),
-                "wrist_roll": Motor(5, "sts3215", norm_mode_body),
+                "wrist_roll": Motor(5, "sts3215", MotorNormMode.RANGE_M100_100),
                 "gripper": Motor(6, "sts3215", MotorNormMode.RANGE_0_100),
             }
         else:
