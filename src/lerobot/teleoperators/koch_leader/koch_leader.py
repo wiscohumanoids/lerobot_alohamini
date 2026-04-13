@@ -104,10 +104,9 @@ class KochLeader(Teleoperator):
         drive_modes = {motor: 1 if motor == "elbow_flex" else 0 for motor in self.bus.motors}
 
         input(f"Move {self} to the middle of its range of motion and press ENTER....")
+        homing_offsets = self.bus.set_half_turn_homings()
+
         full_turn_motors = ["shoulder_pan", "wrist_roll"]
-        homing_targets = [motor for motor in self.bus.motors if motor not in full_turn_motors]
-        homing_offsets = self.bus.set_half_turn_homings(homing_targets)
-        homing_offsets.update(dict.fromkeys(full_turn_motors, 0))
         unknown_range_motors = [motor for motor in self.bus.motors if motor not in full_turn_motors]
         print(
             f"Move all joints except {full_turn_motors} sequentially through their "

@@ -48,7 +48,7 @@ class SOLeader(Teleoperator):
                 "elbow_flex": Motor(3, "sts3215", norm_mode_body),
                 "wrist_flex": Motor(4, "sts3215", norm_mode_body),
                 "wrist_yaw": Motor(5, "sts3215", norm_mode_body),
-                "wrist_roll": Motor(6, "sts3215", norm_mode_body),
+                "wrist_roll": Motor(6, "sts3215", MotorNormMode.RANGE_M100_100),
                 "gripper": Motor(7, "sts3215", MotorNormMode.RANGE_0_100),
             }
         elif config.arm_profile == "so-arm-5dof":
@@ -57,7 +57,7 @@ class SOLeader(Teleoperator):
                 "shoulder_lift": Motor(2, "sts3215", norm_mode_body),
                 "elbow_flex": Motor(3, "sts3215", norm_mode_body),
                 "wrist_flex": Motor(4, "sts3215", norm_mode_body),
-                "wrist_roll": Motor(5, "sts3215", norm_mode_body),
+                "wrist_roll": Motor(5, "sts3215", MotorNormMode.RANGE_M100_100),
                 "gripper": Motor(6, "sts3215", MotorNormMode.RANGE_0_100),
             }
         else:
@@ -92,6 +92,7 @@ class SOLeader(Teleoperator):
             self.calibrate()
 
         self.configure()
+        self._apply_fresh_wrist_roll_homing()
         logger.info(f"{self} connected.")
 
     @property
@@ -141,6 +142,30 @@ class SOLeader(Teleoperator):
         self.bus.write_calibration(self.calibration)
         self._save_calibration()
         print(f"Calibration saved to {self.calibration_fpath}")
+
+    def _apply_fresh_wrist_roll_homing(self) -> None:
+        """Compute and apply a homing offset for wrist_roll from its current position.
+
+        Unlike joints with mechanical stops, wrist_roll is a continuous-rotation joint
+        whose encoder angle is arbitrary at startup.  A saved homing offset becomes stale
+        the moment the wrist is moved while unpowered, so we re-home it every connect.
+        """
+        motor = "wrist_roll"
+        if motor not in self.bus.motors:
+            return
+        self.bus.write("Homing_Offset", motor, 0)
+        pos = self.bus.read("Present_Position", motor, normalize=False)
+        offsets = self.bus._get_half_turn_homings({motor: pos})
+        self.bus.write("Homing_Offset", motor, offsets[motor])
+        if self.bus.calibration and motor in self.bus.calibration:
+            self.bus.calibration[motor] = MotorCalibration(
+                id=self.bus.motors[motor].id,
+                drive_mode=self.bus.calibration[motor].drive_mode,
+                homing_offset=offsets[motor],
+                range_min=self.bus.calibration[motor].range_min,
+                range_max=self.bus.calibration[motor].range_max,
+            )
+        logger.info(f"Fresh wrist_roll homing applied: offset={offsets[motor]}")
 
     def configure(self) -> None:
         self.bus.disable_torque()

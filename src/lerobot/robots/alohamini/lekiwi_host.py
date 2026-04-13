@@ -71,6 +71,7 @@ def main():
     robot_config = LeKiwiConfig()
     robot_config.id = "AlohaMiniRobot"
     robot_config.arm_profile = args.arm_profile
+    robot_config.use_degrees = True
     robot = LeKiwi(robot_config)
 
 

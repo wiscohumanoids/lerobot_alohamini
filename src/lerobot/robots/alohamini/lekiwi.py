@@ -68,7 +68,7 @@ class LeKiwi(Robot):
                 "arm_left_elbow_flex": Motor(3, "sts3095", norm_mode_body),
                 "arm_left_wrist_flex": Motor(4, "sts3215", norm_mode_body),
                 "arm_left_wrist_yaw": Motor(5, "sts3215", norm_mode_body),
-                "arm_left_wrist_roll": Motor(6, "sts3215", norm_mode_body),
+                "arm_left_wrist_roll": Motor(6, "sts3215", MotorNormMode.RANGE_M100_100),
                 "arm_left_gripper": Motor(7, "sts3215", MotorNormMode.RANGE_0_100),
             }
             right_arm_motors_cfg = {
@@ -77,7 +77,7 @@ class LeKiwi(Robot):
                 "arm_right_elbow_flex": Motor(3, "sts3095", norm_mode_body),
                 "arm_right_wrist_flex": Motor(4, "sts3215", norm_mode_body),
                 "arm_right_wrist_yaw": Motor(5, "sts3215", norm_mode_body),
-                "arm_right_wrist_roll": Motor(6, "sts3215", norm_mode_body),
+                "arm_right_wrist_roll": Motor(6, "sts3215", MotorNormMode.RANGE_M100_100),
                 "arm_right_gripper": Motor(7, "sts3215", MotorNormMode.RANGE_0_100),
             }
             self._left_arm_state_keys = (
@@ -104,7 +104,7 @@ class LeKiwi(Robot):
                 "arm_left_shoulder_lift": Motor(2, "sts3215", norm_mode_body),
                 "arm_left_elbow_flex": Motor(3, "sts3215", norm_mode_body),
                 "arm_left_wrist_flex": Motor(4, "sts3215", norm_mode_body),
-                "arm_left_wrist_roll": Motor(5, "sts3215", norm_mode_body),
+                "arm_left_wrist_roll": Motor(5, "sts3215", MotorNormMode.RANGE_M100_100),
                 "arm_left_gripper": Motor(6, "sts3215", MotorNormMode.RANGE_0_100),
             }
             right_arm_motors_cfg = {
@@ -112,7 +112,7 @@ class LeKiwi(Robot):
                 "arm_right_shoulder_lift": Motor(2, "sts3215", norm_mode_body),
                 "arm_right_elbow_flex": Motor(3, "sts3215", norm_mode_body),
                 "arm_right_wrist_flex": Motor(4, "sts3215", norm_mode_body),
-                "arm_right_wrist_roll": Motor(5, "sts3215", norm_mode_body),
+                "arm_right_wrist_roll": Motor(5, "sts3215", MotorNormMode.RANGE_M100_100),
                 "arm_right_gripper": Motor(6, "sts3215", MotorNormMode.RANGE_0_100),
             }
             self._left_arm_state_keys = (
@@ -244,6 +244,7 @@ class LeKiwi(Robot):
             cam.connect()
 
         self.configure()
+        self._apply_fresh_wrist_roll_homing()
         logger.info(f"{self} connected.")
 
         self.lift.home()
@@ -286,7 +287,7 @@ class LeKiwi(Robot):
 
         input(f"Move {arm_label.upper()} arm to the middle of its range of motion, then press ENTER...")
         full_turn_motors = [full_turn_motor] if full_turn_motor in arm_motors else []
-        homing_targets = [motor for motor in arm_motors if motor not in full_turn_motors]
+        homing_targets = [m for m in arm_motors if m not in full_turn_motors]
         homing = bus.set_half_turn_homings(homing_targets)
         homing.update(dict.fromkeys(full_turn_motors, 0))
         unknown_range_motors = [m for m in arm_motors if m not in full_turn_motors]
@@ -404,6 +405,35 @@ class LeKiwi(Robot):
         self._save_calibration()
         print("Calibration saved to", self.calibration_fpath)
 
+
+    def _apply_fresh_wrist_roll_homing(self) -> None:
+        """Compute and apply a homing offset for both wrist_roll motors from their current positions.
+
+        Unlike joints with mechanical stops, wrist_roll is a continuous-rotation joint
+        whose encoder angle is arbitrary at startup.  A saved homing offset becomes stale
+        the moment the wrist is moved while unpowered, so we re-home it every connect.
+        """
+        wrist_motors = {
+            self.left_bus: "arm_left_wrist_roll",
+            self.right_bus: "arm_right_wrist_roll",
+        }
+        for bus, motor in wrist_motors.items():
+            if motor not in bus.motors:
+                continue
+            bus.write("Homing_Offset", motor, 0)
+            pos = bus.read("Present_Position", motor, normalize=False)
+            offsets = bus._get_half_turn_homings({motor: pos})
+            bus.write("Homing_Offset", motor, offsets[motor])
+            if bus.calibration and motor in bus.calibration:
+                old = bus.calibration[motor]
+                bus.calibration[motor] = MotorCalibration(
+                    id=old.id,
+                    drive_mode=old.drive_mode,
+                    homing_offset=offsets[motor],
+                    range_min=old.range_min,
+                    range_max=old.range_max,
+                )
+            logger.info(f"Fresh {motor} homing applied: offset={offsets[motor]}")
 
     def configure(self):
         # Set-up arm actuators (position mode)

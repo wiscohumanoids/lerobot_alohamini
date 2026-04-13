@@ -283,12 +283,19 @@ class FeetechMotorsBus(SerialMotorsBus):
         """
         On Feetech Motors:
         Present_Position = Actual_Position - Homing_Offset
+
+        Wraps the raw position into a single turn before computing the offset,
+        and clamps the result to fit the Homing_Offset register (sign-magnitude, 11-bit magnitude → ±2047).
         """
         half_turn_homings: dict[NameOrID, Value] = {}
         for motor, pos in positions.items():
             model = self._get_motor_model(motor)
-            max_res = self.model_resolution_table[model] - 1
-            half_turn_homings[motor] = pos - int(max_res / 2)
+            resolution = self.model_resolution_table[model]
+            half = int((resolution - 1) / 2)
+            wrapped_pos = pos % resolution
+            offset = wrapped_pos - half
+            offset = max(-2047, min(2047, offset))
+            half_turn_homings[motor] = offset
 
         return half_turn_homings
 
