@@ -538,8 +538,23 @@ def train(cfg: TrainPipelineConfig, accelerator: Accelerator | None = None):
 
 
 def main():
+    import sys
+    import traceback
+    from pathlib import Path
+    from datetime import datetime
+
+    log_path = Path("training_error.log")
     register_third_party_plugins()
-    train()
+    try:
+        train()
+    except Exception:
+        error_msg = traceback.format_exc()
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(log_path, "a") as f:
+            f.write(f"\n{'='*60}\n{timestamp}\n{'='*60}\n")
+            f.write(error_msg)
+        print(f"\nTRAINING CRASHED. Full error saved to: {log_path.resolve()}", file=sys.stderr)
+        raise
 
 
 if __name__ == "__main__":
