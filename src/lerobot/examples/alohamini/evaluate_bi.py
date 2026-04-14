@@ -96,12 +96,25 @@ def main():
     parser.add_argument("--task_description", type=str, default="My task description", help="Description of the task")
     parser.add_argument("--hf_model_id", type=str, required=True, help="HuggingFace model repo id")
     parser.add_argument("--hf_dataset_id", type=str, required=True, help="HuggingFace dataset repo id")
-    parser.add_argument("--remote_ip", type=str, default="127.0.0.1", help="LeKiwi host IP address")
+    parser.add_argument("--remote_ip", type=str, default="10.139.203.203", help="LeKiwi host IP address")
     parser.add_argument("--robot_id", type=str, default="lekiwi", help="Robot ID")
     parser.add_argument(
         "--disable_rerun",
         action="store_true",
         help="Disable rerun visualization to avoid native viewer crashes on macOS.",
+    )
+    parser.add_argument(
+        "--num_inference_steps",
+        type=int,
+        default=None,
+        help="Override number of denoising steps at inference (diffusion only). E.g. 10 for fast DDIM.",
+    )
+    parser.add_argument(
+        "--noise_scheduler_type",
+        type=str,
+        default=None,
+        choices=["DDPM", "DDIM"],
+        help="Override noise scheduler type at inference (diffusion only). Use DDIM for faster inference.",
     )
 
     args = parser.parse_args()
@@ -113,6 +126,10 @@ def main():
 
     # === Policy ===
     policy_config = PreTrainedConfig.from_pretrained(args.hf_model_id)
+    if args.num_inference_steps is not None and hasattr(policy_config, "num_inference_steps"):
+        policy_config.num_inference_steps = args.num_inference_steps
+    if args.noise_scheduler_type is not None and hasattr(policy_config, "noise_scheduler_type"):
+        policy_config.noise_scheduler_type = args.noise_scheduler_type
     policy_class = get_policy_class(policy_config.type)
     if policy_config.use_peft:
         from peft import PeftConfig, PeftModel  # type: ignore[reportMissingImports]
