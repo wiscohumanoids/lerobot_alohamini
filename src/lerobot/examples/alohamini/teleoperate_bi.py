@@ -46,11 +46,11 @@ if NO_LEADER:
 robot_config = LeKiwiClientConfig(remote_ip=args.remote_ip, id="my_alohamini", no_keyboard=NO_KEYBOARD)
 bi_cfg = BiSOLeaderConfig(
     left_arm_config=SOLeaderConfig(
-        port="/dev/cu.usbmodem5B140323471",
+        port="/dev/ttyACM0",
         arm_profile=args.arm_profile,
     ),
     right_arm_config=SOLeaderConfig(
-        port="/dev/cu.usbmodem5B140330511",
+        port="/dev/ttyACM1",
         arm_profile=args.arm_profile,
     ),
     id=args.leader_id,

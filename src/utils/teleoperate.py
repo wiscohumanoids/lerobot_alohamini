@@ -20,6 +20,7 @@ parser.add_argument("--fps", type=int, default=30, help="Main loop frequency (fr
 parser.add_argument("--remote_ip", type=str, default="10.139.203.203", help="LeKiwi host IP address")
 parser.add_argument("--leader_id", type=str, default="so101_leader_bi", help="Leader arm device ID")
 parser.add_argument("--use_rerun", action="store_true", help="Enable Rerun vis (kind of extraneous)")
+parser.add_argument("--no_lift", action="store_true", help="Do not send lift-axis commands during teleop.")
 parser.add_argument(
     "--arm_profile",
     type=str,
@@ -34,6 +35,7 @@ NO_ROBOT = args.no_robot
 NO_LEADER = args.no_leader
 USE_RERUN = args.use_rerun
 FPS = args.fps
+NO_LIFT = args.no_lift
 
 if NO_ROBOT:
     print("NO_ROBOT: robot will not connect, only print actions.")
@@ -110,7 +112,6 @@ if USE_RERUN:
 
 # Main loop
 action = {
-    "lift_axis.height_mm": 300.0,
     "x.vel": 0.0,
     "y.vel": 0.0,
     "theta.vel": 0.0
@@ -136,16 +137,17 @@ while True:
         "x.vel": 0.0,
         "y.vel": 0.0,
         "theta.vel": 0.0,
-        "lift_axis.height_mm": 0.0  # DISABLED
-        #"lift_axis.height_mm": action["lift_axis.height_mm"] 
     }
 
     for k in MOVE_BINDINGS.keys():
         if k in key_last_received and current_time - key_last_received[k] < KEY_TIMEOUT:
             attr, val = MOVE_BINDINGS[k]
+            if attr not in current_action:
+                current_action[attr] = 0.0
             current_action[attr] += val
 
-    current_action["lift_axis.height_mm"] = limit(current_action["lift_axis.height_mm"], 0.0, 600.0)
+    if not NO_LIFT and current_action.get("lift_axis.height_mm") is not None:
+        current_action["lift_axis.height_mm"] = limit(current_action["lift_axis.height_mm"], 0.0, 600.0)
 
     SPACE = ' '
     if SPACE in keys_pressed:
