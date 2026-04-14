@@ -1,0 +1,100 @@
+# W&B sweep config for tuning ACT on AlohaMini datasets.
+#
+# The default ACT hyperparameters in `lerobot-train` come from the original
+# ALOHA paper (6-DOF arms, different cameras, different servos). AlohaMini
+# has 5-DOF arms and different kinematics, so the paper defaults are a
+# starting point, not an answer. This sweep does a 20-trial Bayesian search
+# to give the team empirical defaults instead.
+#
+# Launch with:
+#   wandb sweep configs/sweeps/act_alohamini.yaml
+#   wandb agent <USERNAME>/<PROJECT>/<SWEEP_ID>
+#
+# Before launching, edit the `dataset.repo_id` value below to match the
+# dataset you want to sweep against (e.g. a recent recording from
+# `record_bi.py`). See docs/SWEEPS.md for the full walkthrough, including
+# how to override it from the command line instead of editing this file,
+# and how to run multiple agents in parallel on the same sweep.
+#
+# Each trial trains ACT for `steps` gradient steps and reports the rolling
+# train loss to W&B. Pair with the eval_metrics.csv from evaluate_bi.py to
+# compare trial outcomes on the real robot (see SWEEPS.md, "Combining with
+# eval_metrics.csv").
+
+program: lerobot-train
+method: bayes
+metric:
+  name: train/loss
+  goal: minimize
+
+# Cap the number of trials the scheduler runs. Delete this block if you
+# want the agent to keep exploring indefinitely.
+run_cap: 20
+
+# Early-terminate clearly-losing trials so the GPU budget is spent on the
+# promising region of the search space.
+early_terminate:
+  type: hyperband
+  min_iter: 5000
+  eta: 3
+
+parameters:
+  # --- Search space -----------------------------------------------------
+  # Parameter names below match the real fields on ACTConfig
+  # (src/lerobot/policies/act/configuration_act.py) and TrainPipelineConfig
+  # (src/lerobot/configs/train.py). Do not rename without updating both.
+
+  # How many actions the policy predicts per forward pass. Larger chunks
+  # are smoother but react slower to surprises.
+  policy.chunk_size:
+    values: [10, 25, 50, 100]
+
+  # Weight on the KL term in the CVAE loss. Higher = more diverse latent
+  # codes, lower = more deterministic behavior. Paper default is 10.
+  policy.kl_weight:
+    min: 1.0
+    max: 100.0
+    distribution: log_uniform_values
+
+  # AdamW learning rate. Paper default is 1e-5 which is on the low end for
+  # a dataset of AlohaMini's size; sweep a log-uniform range.
+  policy.optimizer_lr:
+    min: 1.0e-5
+    max: 1.0e-3
+    distribution: log_uniform_values
+
+  # Transformer hidden dimension. Paper default is 512; 256 trains faster
+  # and may generalize better on smaller datasets.
+  policy.dim_model:
+    values: [256, 512]
+
+  # Gradient batch size. Tune this to your GPU's memory ceiling.
+  batch_size:
+    values: [4, 8, 16]
+
+  # --- Fixed across all trials -----------------------------------------
+  policy.type:
+    value: act
+  policy.device:
+    value: cuda
+
+  # Dataset repo. Edit this to point at your own AlohaMini dataset before
+  # running `wandb sweep`, or override it at agent launch time with
+  # `wandb agent ... --count N` and env vars (see SWEEPS.md).
+  dataset.repo_id:
+    value: wiscohumanoids/alohamini_cube_place_5dof_v38
+  dataset.video_backend:
+    value: pyav
+
+  # 30K steps per trial is enough to separate good hyperparameter
+  # settings from bad ones without burning a full training budget on
+  # each trial. Final runs should use 50K+ steps.
+  steps:
+    value: 30000
+  save_freq:
+    value: 30000
+  log_freq:
+    value: 100
+
+  wandb.enable:
+    value: true
