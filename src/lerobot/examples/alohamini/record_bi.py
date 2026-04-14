@@ -216,6 +216,9 @@ def main():
         while recorded_episodes < args.num_episodes and not events["stop_recording"]:
             log_say(f"Recording episode {recorded_episodes + 1} of {args.num_episodes}")
 
+            # Reset per-episode staleness counters so we can assess data quality
+            robot.reset_frame_counters()
+
             # === Main record loop ===
             record_loop(
                 robot=robot,
@@ -257,6 +260,19 @@ def main():
                 events["exit_early"] = False
                 dataset.clear_episode_buffer()
                 continue
+
+            # === Data quality check ===
+            total = robot.total_frame_count
+            stale = robot.stale_frame_count
+            if total > 0:
+                stale_pct = (stale / total) * 100
+                if stale_pct > 5:
+                    log_say(
+                        f"WARNING: Episode {recorded_episodes + 1} had {stale_pct:.1f}% stale frames "
+                        f"({stale}/{total}). Consider re-recording."
+                    )
+                else:
+                    print(f"Episode {recorded_episodes + 1} data quality: {stale}/{total} stale frames ({stale_pct:.1f}%)")
 
             save_episode_with_live_preview(
                 dataset=dataset,

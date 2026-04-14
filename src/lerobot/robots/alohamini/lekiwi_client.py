@@ -18,6 +18,7 @@ import base64
 import inspect
 import json
 import logging
+import time
 from functools import cached_property
 import os
 from typing import Any
@@ -80,6 +81,14 @@ class LeKiwiClient(Robot):
 
         self._is_connected = False
         self.logs = {}
+
+        # Observation staleness tracking.  _last_obs_received_at is updated
+        # every time a *new* ZMQ message arrives.  Callers can inspect
+        # stale_frame_count / total_frame_count to assess data quality.
+        self._last_obs_received_at: float = 0.0
+        self._stale_frame_count: int = 0
+        self._total_frame_count: int = 0
+        self.stale_threshold_s: float = 0.1  # 100 ms ≈ 3 frames at 30 fps
 
     @cached_property
     def _state_ft(self) -> dict[str, type]:
@@ -257,18 +266,22 @@ class LeKiwiClient(Robot):
         # 3. Parse the JSON message
         observation = self._parse_observation_json(latest_message_str)
 
-        
-
         # 4. If JSON parsing failed, return cached data
         if observation is None:
             return self.last_frames, self.last_remote_state
 
-        # 5. Process the valid observation data
+        # 5. Strip host-side metadata before processing as robot state
+        observation.pop("__timestamp__", None)
+
+        # 6. Process the valid observation data
         try:
             new_frames, new_state = self._remote_state_from_obs(observation)
         except Exception as e:
             logging.error(f"Error processing observation data, serving last observation: {e}")
             return self.last_frames, self.last_remote_state
+
+        # Mark that we received a fresh observation right now
+        self._last_obs_received_at = time.monotonic()
 
         self.last_frames.update(new_frames)
         self.last_remote_state = new_state
@@ -284,6 +297,18 @@ class LeKiwiClient(Robot):
         """
         frames, obs_dict = self._get_data()
 
+        # Staleness bookkeeping — only after the first real observation
+        self._total_frame_count += 1
+        if self._last_obs_received_at > 0:
+            obs_age = time.monotonic() - self._last_obs_received_at
+            if obs_age > self.stale_threshold_s:
+                self._stale_frame_count += 1
+                logging.warning(
+                    "Stale observation: %.0f ms old (threshold: %.0f ms)",
+                    obs_age * 1000,
+                    self.stale_threshold_s * 1000,
+                )
+
         # Loop over each configured camera
         for cam_name, frame in frames.items():
             if frame is None:
@@ -291,8 +316,22 @@ class LeKiwiClient(Robot):
                 frame = np.zeros((640, 480, 3), dtype=np.uint8)
             obs_dict[cam_name] = frame
 
-
         return obs_dict
+
+    # --- Staleness helpers (used by recording scripts) ---
+
+    @property
+    def stale_frame_count(self) -> int:
+        return self._stale_frame_count
+
+    @property
+    def total_frame_count(self) -> int:
+        return self._total_frame_count
+
+    def reset_frame_counters(self) -> None:
+        """Reset per-episode staleness counters."""
+        self._stale_frame_count = 0
+        self._total_frame_count = 0
 
     def _from_keyboard_to_base_action(self, pressed_keys: np.ndarray):
         if self.config.no_keyboard:
