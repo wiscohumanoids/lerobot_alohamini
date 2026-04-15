@@ -106,7 +106,7 @@ def limit(val, min_val, max_val):
     return max(min(val, max_val), min_val)
 
 if USE_RERUN:
-    init_rerun(session_name="lekiwi_teleop")
+    init_rerun(session_name="lekiwi_teleop", ip="0.0.0.0", port=9876)
 
 # Main loop
 action = {

@@ -402,6 +402,10 @@ class LeKiwiClient(Robot):
         Returns:
             np.ndarray: the action sent to the motors, potentially clipped.
         """
+        # Clamp NaN/inf to 0 — policy can output NaN (e.g. image resolution mismatch)
+        import math
+        action = {k: (0.0 if isinstance(v, float) and not math.isfinite(v) else v)
+                  for k, v in action.items()}
         self.zmq_cmd_socket.send_string(json.dumps(action))  # action is in motor space
 
         # TODO(Steven): Remove the np conversion when it is possible to record a non-numpy array value

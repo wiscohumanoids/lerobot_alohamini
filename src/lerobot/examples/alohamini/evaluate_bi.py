@@ -124,6 +124,18 @@ def main():
     robot = LeKiwiClient(robot_config)
     robot.connect()
 
+    # === Resize camera observations to match policy training resolution (120x160) ===
+    import cv2 as _cv2
+    import numpy as _np
+    _orig_get_obs = robot.get_observation
+    def _get_observation_resized():
+        obs = _orig_get_obs()
+        for k, v in obs.items():
+            if isinstance(v, _np.ndarray) and v.ndim == 3 and v.shape[2] == 3:
+                obs[k] = _cv2.resize(v, (160, 120), interpolation=_cv2.INTER_LINEAR)
+        return obs
+    robot.get_observation = _get_observation_resized
+
     # === Policy ===
     policy_config = PreTrainedConfig.from_pretrained(args.hf_model_id)
     if args.num_inference_steps is not None and hasattr(policy_config, "num_inference_steps"):

@@ -225,9 +225,13 @@ def say(text: str, blocking: bool = False):
 
 def log_say(text: str, play_sounds: bool = True, blocking: bool = False):
     logging.info(text)
+    print(text)
 
     if play_sounds:
-        say(text, blocking)
+        try:
+            say(text, blocking)
+        except (FileNotFoundError, RuntimeError):
+            pass  # TTS not available (WSL/headless), ignore
 
 
 def get_channel_first_image_shape(image_shape: tuple) -> tuple:

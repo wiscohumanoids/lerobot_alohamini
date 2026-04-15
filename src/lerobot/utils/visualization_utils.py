@@ -34,7 +34,7 @@ def init_rerun(
         ip: Optional IP for connecting to a Rerun server.
         port: Optional port for connecting to a Rerun server.
     """
-    batch_size = os.getenv("RERUN_FLUSH_NUM_BYTES", "8000")
+    batch_size = os.getenv("RERUN_FLUSH_NUM_BYTES", "1000000")
     os.environ["RERUN_FLUSH_NUM_BYTES"] = batch_size
     rr.init(session_name)
     memory_limit = os.getenv("LEROBOT_RERUN_MEMORY_LIMIT", "10%")
@@ -53,7 +53,7 @@ def _is_scalar(x):
 def log_rerun_data(
     observation: RobotObservation | None = None,
     action: RobotAction | None = None,
-    compress_images: bool = False,
+    compress_images: bool = True,
 ) -> None:
     """
     Logs observation and action data to Rerun for real-time visualization.
