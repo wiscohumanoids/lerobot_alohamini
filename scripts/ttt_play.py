@@ -385,6 +385,53 @@ def check_winner(board: dict) -> str | None:
     return None
 
 # ---------------------------------------------------------------------------
+# Manual-mode board override (--manual only)
+# ---------------------------------------------------------------------------
+def manual_override(board: dict, turn: str, human_symbol: str, robot_symbol: str):
+    """
+    Interactively re-enter the full board state and whose turn it is.
+    Returns (new_board, new_turn).
+    """
+    print("\n  --- BOARD OVERRIDE ---")
+    print("  Enter each square (1-9). Type X, O, or . for empty.")
+    new_board = {}
+    for sq in range(1, 10):
+        while True:
+            val = input(f"    Square {sq} ({SQUARE_NAMES[sq]}): ").strip().upper()
+            if val in ("X", "O", "."):
+                new_board[sq] = val if val != "." else None
+                break
+            print("    Enter X, O, or .")
+    while True:
+        t = input("  Whose turn is it next? (X/O): ").strip().upper()
+        if t in ("X", "O"):
+            new_turn = "human" if t == human_symbol else "robot"
+            break
+        print("  Enter X or O.")
+    print("  Board updated.")
+    return new_board, new_turn
+
+
+def manual_input(prompt: str, board: dict, turn_ref: list, human_symbol: str, robot_symbol: str) -> str:
+    """
+    Like input(), but if the user types 'e' (override), triggers manual_override
+    and loops back. Returns the raw input string for normal input.
+    turn_ref is a one-element list so callers can see the updated turn value.
+    """
+    while True:
+        raw = input(prompt).strip()
+        if raw.lower() == "e":
+            new_board, new_turn = manual_override(board, turn_ref[0], human_symbol, robot_symbol)
+            board.clear()
+            board.update(new_board)
+            turn_ref[0] = new_turn
+            whose = "your" if new_turn == "human" else "robot's"
+            print(f"  Resuming — it is now {whose} turn.")
+            return "__override__"
+        return raw
+
+
+# ---------------------------------------------------------------------------
 # Main game loop
 # ---------------------------------------------------------------------------
 print("=" * 50)
@@ -408,12 +455,16 @@ else:
     turn = "robot"
 
 board = {sq: None for sq in range(1, 10)}
+turn_ref = [turn]  # mutable so manual_input can update it across the override
 
 print(f"\nYou are {human_symbol}, Robot is {robot_symbol}.")
+if args.manual:
+    print("  (type 'e' at any prompt to override the board state and whose turn it is)")
 print("Starting game. Going to HOME...\n")
 go_home()
 
 while True:
+    turn = turn_ref[0]
     print_board(board)
     winner = check_winner(board)
     if winner:
@@ -429,11 +480,15 @@ while True:
         print(f"Your turn ({human_symbol}) — place your piece on the board.")
         if args.manual:
             while True:
-                raw = input("  Which square did you play? (1-9): ").strip()
+                raw = manual_input("  Which square did you play? (1-9) [or 'e' to override]: ",
+                                   board, turn_ref, human_symbol, robot_symbol)
+                if raw == "__override__":
+                    break  # re-enter outer loop with updated board/turn
                 if raw.isdigit() and int(raw) in range(1, 10) and board[int(raw)] is None:
                     new_sq = int(raw)
                     board[new_sq] = human_symbol
                     print(f"  Recorded your piece at square {new_sq} ({SQUARE_NAMES[new_sq]})")
+                    turn_ref[0] = "robot"
                     break
                 print("  Invalid or occupied square, try again.")
         else:
@@ -461,7 +516,7 @@ while True:
                         print(f"  Recorded your piece at square {new_sq} ({SQUARE_NAMES[new_sq]})")
                         break
                     print("  Invalid or occupied square, try again.")
-        turn = "robot"
+            turn_ref[0] = "robot"
 
     else:
         print(f"Robot's turn ({robot_symbol}).")
@@ -478,20 +533,26 @@ while True:
             sq = empty[0]
             board[sq] = robot_symbol
             print(f"  Robot plays {robot_symbol} at square {sq} ({SQUARE_NAMES[sq]}) [fallback]")
-            print("  Press ENTER when ready for robot to move...", end="", flush=True)
-            input()
-            go_home()
-            replay(sq)
-            go_home()
-            print("  Waiting 2s for camera to settle...")
-            time.sleep(2.0)
-            turn = "human"
+            if args.manual:
+                raw = manual_input("  Press ENTER when ready for robot to move... [or 'e' to override]: ",
+                                   board, turn_ref, human_symbol, robot_symbol)
+            else:
+                print("  Press ENTER when ready for robot to move...", end="", flush=True)
+                input()
+                raw = ""
+            if raw != "__override__":
+                go_home()
+                replay(sq)
+                go_home()
+                print("  Waiting 2s for camera to settle...")
+                time.sleep(2.0)
+                turn_ref[0] = "human"
 
         elif raw_response.startswith("MOVE:"):
             sq_str = raw_response.split(":", 1)[1].strip()
             if not sq_str.isdigit() or int(sq_str) not in range(1, 10):
                 print(f"  Invalid GPT response '{raw_response}', skipping turn.")
-                turn = "human"
+                turn_ref[0] = "human"
                 continue
             sq = int(sq_str)
             if board[sq] is not None:
@@ -504,18 +565,23 @@ while True:
 
             board[sq] = robot_symbol
             print(f"  Robot plays {robot_symbol} at square {sq} ({SQUARE_NAMES[sq]})")
-            print("  Press ENTER when ready for robot to move...", end="", flush=True)
-            input()
-            go_home()
-            replay(sq)
-            go_home()
-            print("  Waiting 2s for camera to settle...")
-            time.sleep(2.0)
-            turn = "human"
+            if args.manual:
+                raw = manual_input("  Press ENTER when ready for robot to move... [or 'e' to override]: ",
+                                   board, turn_ref, human_symbol, robot_symbol)
+            else:
+                print("  Press ENTER when ready for robot to move...", end="", flush=True)
+                raw = input()
+            if raw != "__override__":
+                go_home()
+                replay(sq)
+                go_home()
+                print("  Waiting 2s for camera to settle...")
+                time.sleep(2.0)
+                turn_ref[0] = "human"
 
         else:
             print(f"  Unexpected GPT response: '{raw_response}', skipping.")
-            turn = "human"
+            turn_ref[0] = "human"
 
 print("\nGame over. Returning to HOME.")
 go_home()
