@@ -185,6 +185,12 @@ def main():
         help="Override noise scheduler type at inference (diffusion only). Use DDIM for faster inference.",
     )
     parser.add_argument(
+        "--n_action_steps",
+        type=int,
+        default=None,
+        help="Override number of action steps executed per policy call (diffusion only).",
+    )
+    parser.add_argument(
         "--keep_local_dataset",
         action="store_true",
         help="Keep the local eval dataset cache after a successful HuggingFace push (default: delete).",
@@ -213,6 +219,8 @@ def main():
         policy_config.num_inference_steps = args.num_inference_steps
     if args.noise_scheduler_type is not None and hasattr(policy_config, "noise_scheduler_type"):
         policy_config.noise_scheduler_type = args.noise_scheduler_type
+    if args.n_action_steps is not None and hasattr(policy_config, "n_action_steps"):
+        policy_config.n_action_steps = args.n_action_steps
     policy_class = get_policy_class(policy_config.type)
     if policy_config.use_peft:
         from peft import PeftConfig, PeftModel  # type: ignore[reportMissingImports]
