@@ -22,6 +22,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from openai import AzureOpenAI
+from ttt_detector import read_board
 
 from lerobot.robots.alohamini import LeKiwiClient, LeKiwiClientConfig
 from lerobot.utils.robot_utils import precise_sleep
@@ -210,89 +211,74 @@ def capture_board_image(timeout_s: float = 10.0) -> np.ndarray:
 
 _img_idx = 0
 
-def process_and_save(img: np.ndarray, label: str) -> str:
+def process_and_save(img: np.ndarray, label: str) -> tuple[str, str]:
     """
-    Crop, upscale, sharpen, draw perspective grid on raw image.
-    Saves annotated image to debug dir. Returns annotated_b64.
+    Crop raw image, produce masked + annotated versions.
+    Saves both to debug dir. Returns (masked_path, annotated_path) as strings.
     """
     global _img_idx
 
-    # Step 1: crop raw camera image (no conversion yet)
+    # Step 1: crop raw camera image (RGB from camera)
     crop_raw = img[BOARD_Y0:BOARD_Y1, BOARD_X0:BOARD_X1]
 
-    # Step 2: convert to BGR for cv2
-    crop_bgr = cv2.cvtColor(crop_raw, cv2.COLOR_RGB2BGR)
+    # Step 2: apply color mask on raw RGB crop (same as ttt_vision_test)
+    red_mask    = cv2.inRange(crop_raw, RED_LOWER,    RED_UPPER)
+    yellow_mask = cv2.inRange(crop_raw, YELLOW_LOWER, YELLOW_UPPER)
+    combined    = cv2.bitwise_or(red_mask, yellow_mask)
+    masked_raw  = cv2.bitwise_and(crop_raw, crop_raw, mask=combined)
 
-    # Step 3: upscale 4x + sharpen
-    up = cv2.resize(crop_bgr, (crop_bgr.shape[1] * 4, crop_bgr.shape[0] * 4), interpolation=cv2.INTER_CUBIC)
-    kernel = np.array([[0, -1, 0], [-1, 5.8, -1], [0, -1, 0]])
-    sharpened = cv2.filter2D(up, -1, kernel)
+    # Step 3: convert to BGR, upscale + sharpen
+    def upscale_sharpen(im_bgr):
+        up = cv2.resize(im_bgr, (im_bgr.shape[1] * 4, im_bgr.shape[0] * 4), interpolation=cv2.INTER_CUBIC)
+        kernel = np.array([[0, -1, 0], [-1, 5.8, -1], [0, -1, 0]])
+        return cv2.filter2D(up, -1, kernel)
 
-    # Step 4: draw perspective-correct grid + square numbers
+    crop_bgr   = cv2.cvtColor(crop_raw,  cv2.COLOR_RGB2BGR)
+    masked_bgr = cv2.cvtColor(masked_raw, cv2.COLOR_RGB2BGR)
+    sharpened        = upscale_sharpen(crop_bgr)
+    masked_sharpened = upscale_sharpen(masked_bgr)
+
+    # Step 4: draw perspective grid on raw for debug
     annotated = draw_perspective_grid(sharpened)
 
     # Save for debugging
-    save_path = DEBUG_DIR / f"img_{_img_idx:03d}_{label}_annotated.jpg"
-    cv2.imwrite(str(save_path), annotated)
-    print(f"  Saved: {save_path.name}")
+    annotated_path = str(DEBUG_DIR / f"img_{_img_idx:03d}_{label}_annotated.jpg")
+    masked_path    = str(DEBUG_DIR / f"img_{_img_idx:03d}_{label}_masked.jpg")
+    cv2.imwrite(annotated_path, annotated)
+    cv2.imwrite(masked_path,    masked_sharpened)
+    print(f"  Saved: {Path(annotated_path).name}, {Path(masked_path).name}")
     _img_idx += 1
 
-    _, buf = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 95])
-    return base64.b64encode(buf.tobytes()).decode("utf-8")
+    return masked_path, annotated_path
 
 # ---------------------------------------------------------------------------
-# GPT call 1: vision — read board state from image after human move
+# Board detection via ttt_detector (blue outline + perspective warp + HSV)
+# (LLM vision call commented out — replaced by ttt_detector)
+# VISION_PROMPT = """..."""
 # ---------------------------------------------------------------------------
-VISION_PROMPT = """You are reading a tic-tac-toe board from a top-down camera image.
-
-Color mapping:
-  RED pieces    = X
-  YELLOW pieces = O
-
-Board squares are numbered:
-  1 | 2 | 3
-  ---------
-  4 | 5 | 6
-  ---------
-  7 | 8 | 9
-
-Look at the image and return ONLY the board state in this exact format (use . for empty):
-. | . | .
----------
-. | . | .
----------
-. | . | .
-
-No extra text."""
 
 def read_board_from_image(img: np.ndarray) -> dict:
     """
-    Calls GPT vision to read the board. Returns dict sq(1-9) -> 'X', 'O', or None.
+    Uses ttt_detector on the annotated crop to read board state.
+    Returns dict sq(1-9) -> 'X', 'O', or None.
     """
-    annotated_b64 = process_and_save(img, "human_turn")
-    response = client.chat.completions.create(
-        model="gpt-4.1",
-        messages=[{"role": "user", "content": [
-            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{annotated_b64}"}},
-            {"type": "text",      "text": VISION_PROMPT},
-        ]}],
-        max_tokens=60,
-        temperature=0,
-    )
-    full = response.choices[0].message.content.strip()
-    print(f"  GPT board read:\n{full}")
+    _, annotated_path = process_and_save(img, "human_turn")
 
-    # Parse the 3-line grid into a board dict
-    board = {sq: None for sq in range(1, 10)}
-    rows = [l.strip() for l in full.split("\n") if "|" in l]
-    for r, row_str in enumerate(rows[:3]):
-        cells = [c.strip() for c in row_str.split("|")]
-        for c, val in enumerate(cells[:3]):
-            sq = r * 3 + c + 1
-            if val == "X":
-                board[sq] = "X"
-            elif val == "O":
-                board[sq] = "O"
+    try:
+        cells = read_board(annotated_path)  # list of 9 symbols, row-major
+    except Exception as e:
+        print(f"  Detector failed ({e})")
+        return {sq: None for sq in range(1, 10)}
+
+    board = {i + 1: (v if v in ("X", "O") else None) for i, v in enumerate(cells)}
+
+    def cell(sq): return board[sq] if board[sq] else "."
+    print(f"  Detector board read:")
+    print(f"    {cell(1)} | {cell(2)} | {cell(3)}")
+    print(f"    ---------")
+    print(f"    {cell(4)} | {cell(5)} | {cell(6)}")
+    print(f"    ---------")
+    print(f"    {cell(7)} | {cell(8)} | {cell(9)}")
     return board
 
 # ---------------------------------------------------------------------------
@@ -303,31 +289,27 @@ STRATEGY_PROMPT = """You are a tic-tac-toe expert. Choose the optimal next move.
 Current board (. = empty):
 {board_str}
 
+Square-by-square state:
+{square_listing}
+
 You are playing as {symbol}.
+VALID moves (only these squares are empty, you MUST pick from this list): {empty_squares}
 
 Game rules:
-- Two players alternate turns placing their symbol on empty squares.
-- The first player to get 3 of their symbols in a row (horizontal, vertical, or diagonal) wins.
 - Winning lines: 1-2-3, 4-5-6, 7-8-9 (rows), 1-4-7, 2-5-8, 3-6-9 (columns), 1-5-9, 3-5-7 (diagonals).
-- If all 9 squares are filled with no winner, it is a draw.
-- You may only play on empty squares (marked with .).
 
-Before choosing, work through these steps explicitly:
+Before choosing, work through these steps concisely — only mention relevant lines:
 
-Be concise — only list lines/squares that are relevant, skip ones with nothing to note.
-
-Step 1 - MY WINS: List any winning line where I have 2 and the third square is empty.
-Step 2 - OPPONENT WINS: List any line where opponent has 2 and the third is empty (must block).
-Step 3 - MY FORKS: List empty squares that would create 2+ threats for me.
-Step 4 - OPPONENT FORKS: List empty squares where opponent could fork.
+Step 1 - MY WINS: Any line where I have 2 and the third is in {empty_squares}?
+Step 2 - OPPONENT WINS: Any line where opponent has 2 and the third is in {empty_squares}? (must block)
+Step 3 - MY FORKS: Any square in {empty_squares} that creates 2+ threats for me?
+Step 4 - OPPONENT FORKS: Any square in {empty_squares} where opponent could fork?
 Step 5 - CHOOSE: Win > Block > Fork > Block Fork > Center(5) > Opposite corner > Empty corner > Empty side.
 
+IMPORTANT: Your final answer MUST be one of the squares in {empty_squares}. Do not pick any other number.
+
 After your reasoning, output ONLY one final line:
-  MOVE: <square_number>
-Or if the game is already over:
-  GAME_OVER: X
-  GAME_OVER: O
-  GAME_OVER: DRAW"""
+  MOVE: <square_number>"""
 
 def ask_gpt_for_move(board: dict, symbol: str) -> str:
     """Pure text strategy call. Returns 'MOVE: N' or 'GAME_OVER: ...'."""
@@ -340,21 +322,39 @@ def ask_gpt_for_move(board: dict, symbol: str) -> str:
         f"  ---------\n"
         f"  {cell(7)} | {cell(8)} | {cell(9)}"
     )
-    prompt = STRATEGY_PROMPT.format(board_str=board_str, symbol=symbol)
-    response = client.chat.completions.create(
-        model="gpt-4.1",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=1200,
-        temperature=0,
+    square_listing = "\n".join(
+        f"  square {sq}: {board[sq] if board[sq] else 'empty'}"
+        for sq in range(1, 10)
     )
-    full = response.choices[0].message.content.strip()
-    print(f"  GPT reasoning:\n{full}\n")
-    # Extract the final MOVE: or GAME_OVER: line
-    for line in reversed(full.splitlines()):
-        line = line.strip()
-        if line.startswith("MOVE:") or line.startswith("GAME_OVER:"):
-            return line
-    return full  # fallback
+    empty_squares = [sq for sq in range(1, 10) if board[sq] is None]
+    prompt = STRATEGY_PROMPT.format(
+        board_str=board_str,
+        square_listing=square_listing,
+        symbol=symbol,
+        empty_squares=empty_squares,
+    )
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4.1",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=1200,
+            temperature=0,
+        )
+        full = response.choices[0].message.content.strip()
+        print(f"  GPT reasoning:\n{full}\n")
+        for line in reversed(full.splitlines()):
+            line = line.strip()
+            if line.startswith("MOVE:") or line.startswith("GAME_OVER:"):
+                return line
+        return full
+    except Exception as e:
+        print(f"  Strategy call failed ({e})")
+        empty = [sq for sq in range(1, 10) if board[sq] is None]
+        while True:
+            raw = input(f"  Enter robot's move manually (empty squares: {empty}): ").strip()
+            if raw.isdigit() and int(raw) in empty:
+                return f"MOVE: {raw}"
+            print("  Invalid square.")
 
 # ---------------------------------------------------------------------------
 # Board display
@@ -426,8 +426,8 @@ while True:
     if turn == "human":
         print(f"Your turn ({human_symbol}) — place your piece on the board.")
         input("  Press ENTER when done...")
-        print("  Waiting 5s for camera to settle...")
-        time.sleep(5.0)
+        print("  Waiting 2s for camera to settle...")
+        time.sleep(2.0)
         print("  Reading board from image...")
         curr_img = capture_board_image()
         # Vision call: read full board state from image
@@ -459,14 +459,23 @@ while True:
         raw_response = ask_gpt_for_move(board, robot_symbol)
 
         if raw_response.startswith("GAME_OVER:"):
-            result = raw_response.split(":", 1)[1].strip()
-            if result == "DRAW":
-                print("GPT declares: DRAW!")
-            elif result == robot_symbol:
-                print(f"GPT declares: Robot wins! ({robot_symbol})")
-            else:
-                print(f"GPT declares: You win! ({human_symbol})")
-            break
+            # Ignore GPT's early game-over call — let check_winner handle it
+            print("  GPT called GAME_OVER early — ignoring, continuing game.")
+            empty = [s for s in range(1, 10) if board[s] is None]
+            if not empty:
+                break
+            # Pick any empty square as fallback
+            sq = empty[0]
+            board[sq] = robot_symbol
+            print(f"  Robot plays {robot_symbol} at square {sq} ({SQUARE_NAMES[sq]}) [fallback]")
+            print("  Press ENTER when ready for robot to move...", end="", flush=True)
+            input()
+            go_home()
+            replay(sq)
+            go_home()
+            print("  Waiting 2s for camera to settle...")
+            time.sleep(2.0)
+            turn = "human"
 
         elif raw_response.startswith("MOVE:"):
             sq_str = raw_response.split(":", 1)[1].strip()
@@ -490,8 +499,8 @@ while True:
             go_home()
             replay(sq)
             go_home()
-            print("  Waiting 5s for camera to settle...")
-            time.sleep(5.0)
+            print("  Waiting 2s for camera to settle...")
+            time.sleep(2.0)
             turn = "human"
 
         else:

@@ -1,33 +1,18 @@
 #!/usr/bin/env python3
 """
-Record 9 motion primitives (one per tic-tac-toe square), then replay on demand.
+Record a single bimanual hand-off primitive and replay on demand.
 
-Layout:
-    1 | 2 | 3
-    ---------
-    4 | 5 | 6
-    ---------
-    7 | 8 | 9
-
-Flow:
-  1. Connect, mirror leader->follower
-  2. Press ENTER to save HOME
-  3. For each square 1-9:
-       - Press ENTER to start recording
-       - Perform the motion (go to square, place piece, return to HOME)
-       - Press ENTER to stop
-       - Automatically returns to HOME
-  4. Infinite loop: type 1-9 to replay that square, 'q' to quit
+Motion: left hand picks block → passes to right hand → right hand places it.
+Records as one continuous episode.
 
 Usage:
-    python3 scripts/tic_tac_toe_record.py --remote_ip 10.139.203.203
-    python3 scripts/tic_tac_toe_record.py --remote_ip 10.139.203.203 \\
-        --hf_dataset wiscohumanoids/ttt_primitives --hf_token hf_...
+    python3 scripts/handoff_record.py --remote_ip 10.139.203.203
+    python3 scripts/handoff_record.py --remote_ip 10.139.203.203 --resume
+    python3 scripts/handoff_record.py --remote_ip 10.139.203.203 --replay_only
 """
 
 import argparse
 import json
-import os
 import threading
 import time
 from pathlib import Path
@@ -45,29 +30,18 @@ parser.add_argument("--fps",           type=int, default=30)
 parser.add_argument("--leader_id",     type=str, default="so101_leader_bi")
 parser.add_argument("--left_port",     type=str, default="/dev/ttyACM0")
 parser.add_argument("--right_port",    type=str, default="/dev/ttyACM1")
-parser.add_argument("--hf_dataset",    type=str, default=None)
-parser.add_argument("--hf_token",      type=str, default=None)
-parser.add_argument("--save_dir",      type=str, default="outputs/ttt_primitives")
-parser.add_argument("--goto_duration", type=float, default=3.0,
-                    help="Seconds to hold HOME pose before each replay")
+parser.add_argument("--save_dir",      type=str, default="outputs/handoff_primitives")
+parser.add_argument("--goto_duration", type=float, default=3.0)
 parser.add_argument("--resume",        action="store_true",
-                    help="Skip already-recorded squares and go straight to replay loop")
+                    help="Skip recording if already saved, go straight to replay")
 parser.add_argument("--replay_only",   action="store_true",
-                    help="Skip recording entirely, go straight to replay loop with whatever is saved")
+                    help="Skip recording entirely, go straight to replay")
 args = parser.parse_args()
 
 SAVE_DIR  = Path(args.save_dir)
 SAVE_DIR.mkdir(parents=True, exist_ok=True)
-HOME_FILE = SAVE_DIR / "home_pose.json"
-
-SQUARE_NAMES = {
-    1: "top-left",   2: "top-center",   3: "top-right",
-    4: "mid-left",   5: "center",       6: "mid-right",
-    7: "bot-left",   8: "bot-center",   9: "bot-right",
-}
-
-def ep_file(sq: int) -> Path:
-    return SAVE_DIR / f"square_{sq}.json"
+HOME_FILE    = SAVE_DIR / "home_pose.json"
+HANDOFF_FILE = SAVE_DIR / "handoff.json"
 
 # ---------------------------------------------------------------------------
 # Connect
@@ -89,7 +63,6 @@ def get_action() -> dict:
     return {**arm, "x.vel": 0.0, "y.vel": 0.0, "theta.vel": 0.0, "lift_axis.height_mm": 0.0}
 
 def teleop_until_enter(prompt: str = "") -> None:
-    """Mirror leader->follower until user hits ENTER."""
     if prompt:
         print(prompt)
     done = threading.Event()
@@ -111,7 +84,6 @@ def go_home() -> None:
         precise_sleep(1.0 / args.fps)
 
 def record_episode() -> list:
-    """Record frames until ENTER, return episode list."""
     frames = []
     stop = threading.Event()
     threading.Thread(target=lambda: (input(), stop.set()), daemon=True).start()
@@ -131,7 +103,6 @@ def record_episode() -> list:
     return frames
 
 def replay_episode(frames: list) -> None:
-    """Replay a recorded episode at original timing."""
     print(f"  -> Replaying {len(frames)} frames...")
     for i, frame in enumerate(frames):
         t0 = time.perf_counter()
@@ -139,123 +110,63 @@ def replay_episode(frames: list) -> None:
         if i + 1 < len(frames):
             gap = frames[i + 1]["timestamp"] - frame["timestamp"]
             precise_sleep(max(gap - (time.perf_counter() - t0), 0.0))
-    print("  -> Replay done.")
-
-def push_to_hf(local_path: Path, repo_path: str) -> None:
-    if not args.hf_dataset:
-        return
-    try:
-        from huggingface_hub import HfApi
-        token = args.hf_token or os.environ.get("HF_TOKEN")
-        api = HfApi(token=token)
-        api.create_repo(args.hf_dataset, repo_type="dataset", exist_ok=True, private=True)
-        api.upload_file(
-            path_or_fileobj=str(local_path),
-            path_in_repo=repo_path,
-            repo_id=args.hf_dataset,
-            repo_type="dataset",
-        )
-        print(f"  -> Pushed to HF: {args.hf_dataset}/{repo_path}")
-    except Exception as e:
-        print(f"  -> HF push failed (non-fatal): {e}")
+    print("  -> Done.")
 
 # ---------------------------------------------------------------------------
-# STEP 1 — HOME
+# HOME
 # ---------------------------------------------------------------------------
 if args.replay_only or (args.resume and HOME_FILE.exists()):
     print(f"Using existing HOME from {HOME_FILE}")
 else:
     print("=" * 60)
-    print("STEP 1: Move arms to HOME position (leader->follower mirroring active).")
+    print("STEP 1: Move both arms to HOME position.")
     print("        Press ENTER to save HOME.")
     print("=" * 60)
     teleop_until_enter()
-    # Save leader-reported arm positions as HOME
     last = get_action()
     home = {k: float(v) for k, v in last.items() if "arm_" in k}
     HOME_FILE.write_text(json.dumps(home, indent=2))
-    print(f"HOME saved ({len(home)} joints).\n")
+    print(f"HOME saved.\n")
 
 # ---------------------------------------------------------------------------
-# STEP 2 — Record 9 squares
+# Record hand-off
 # ---------------------------------------------------------------------------
-print("\n" + "=" * 60)
-print("STEP 2: Record one motion per square.")
-print("  Board layout:")
-print("    1 | 2 | 3")
-print("    ---------")
-print("    4 | 5 | 6")
-print("    ---------")
-print("    7 | 8 | 9")
-print("=" * 60)
-
-for sq in range(1, 10):
-    path = ep_file(sq)
-
-    if args.replay_only or (args.resume and path.exists()):
-        print(f"  Square {sq} ({SQUARE_NAMES[sq]}): skipping.")
-        continue
-
-    print(f"\n--- Square {sq}: {SQUARE_NAMES[sq]} ---")
-    print("  Motion should start AND end at HOME.")
-    input(f"  Press ENTER to start recording square {sq}...")
-    print("  [RECORDING] Perform the motion. Press ENTER to stop.")
-
+if args.replay_only or (args.resume and HANDOFF_FILE.exists()):
+    print(f"Using existing handoff from {HANDOFF_FILE}")
+else:
+    print("=" * 60)
+    print("STEP 2: Record the hand-off motion.")
+    print("  Motion: left picks block → passes to right → right places it.")
+    print("  Start AND end at HOME.")
+    print("=" * 60)
+    input("  Press ENTER to start recording...")
+    print("  [RECORDING] Perform the full hand-off. Press ENTER to stop.")
     frames = record_episode()
     dur = frames[-1]["timestamp"] if frames else 0
     print(f"  Recorded {len(frames)} frames ({dur:.1f}s)")
-
-    path.write_text(json.dumps(frames, indent=2))
-    push_to_hf(path, f"square_{sq}.json")
-
+    HANDOFF_FILE.write_text(json.dumps(frames, indent=2))
     go_home()
-    print(f"  Square {sq} done.\n")
-
-print("\nAll 9 squares recorded!")
-push_to_hf(HOME_FILE, "home_pose.json")
+    print("  Saved.\n")
 
 # ---------------------------------------------------------------------------
-# STEP 3 — Replay loop
+# Replay loop
 # ---------------------------------------------------------------------------
-# Load all episodes into memory
-episodes = {}
-for sq in range(1, 10):
-    path = ep_file(sq)
-    if path.exists():
-        episodes[sq] = json.loads(path.read_text())
-
-print("\n" + "=" * 60)
-print("REPLAY MODE — type a square number (1-9) to replay it.")
-print("Board layout:")
-print("  1 | 2 | 3")
-print("  ---------")
-print("  4 | 5 | 6")
-print("  ---------")
-print("  7 | 8 | 9")
-print("Type 'q' to quit.")
-print("=" * 60)
-
-while True:
-    try:
-        raw = input("\nSquare to replay (1-9) or 'q': ").strip()
-    except (EOFError, KeyboardInterrupt):
-        break
-
-    if raw.lower() == "q":
-        break
-
-    if not raw.isdigit() or int(raw) not in range(1, 10):
-        print("  Invalid — enter a number 1-9.")
-        continue
-
-    sq = int(raw)
-    if sq not in episodes:
-        print(f"  Square {sq} not recorded yet.")
-        continue
-
-    print(f"  Square {sq}: {SQUARE_NAMES[sq]}")
-    go_home()
-    replay_episode(episodes[sq])
+if not HANDOFF_FILE.exists():
+    print("No handoff recorded yet. Exiting.")
+else:
+    frames = json.loads(HANDOFF_FILE.read_text())
+    print("\n" + "=" * 60)
+    print("REPLAY MODE — press ENTER to replay, 'q' to quit.")
+    print("=" * 60)
+    while True:
+        try:
+            raw = input("\nPress ENTER to replay (or 'q' to quit): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            break
+        if raw.lower() == "q":
+            break
+        go_home()
+        replay_episode(frames)
 
 print("\nDone. Disconnecting.")
 robot.disconnect()
