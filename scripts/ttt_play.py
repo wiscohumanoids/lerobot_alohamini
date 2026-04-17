@@ -35,6 +35,8 @@ parser.add_argument("--remote_ip",     type=str, default="10.139.203.203")
 parser.add_argument("--primitives_dir",type=str, default="outputs/ttt_primitives")
 parser.add_argument("--goto_duration", type=float, default=3.0)
 parser.add_argument("--fps",           type=int,   default=30)
+parser.add_argument("--manual",        action="store_true",
+                    help="Skip vision — ask the user which square they placed their piece.")
 args = parser.parse_args()
 
 # Load .env from repo root
@@ -425,24 +427,7 @@ while True:
 
     if turn == "human":
         print(f"Your turn ({human_symbol}) — place your piece on the board.")
-        input("  Press ENTER when done...")
-        print("  Waiting 2s for camera to settle...")
-        time.sleep(2.0)
-        print("  Reading board from image...")
-        curr_img = capture_board_image()
-        # Vision call: read full board state from image
-        detected = read_board_from_image(curr_img)
-        # Find what square the human just played (newly detected piece)
-        new_sq = None
-        for sq in range(1, 10):
-            if detected[sq] == human_symbol and board[sq] is None:
-                new_sq = sq
-                break
-        if new_sq:
-            board[new_sq] = human_symbol
-            print(f"  Detected your piece at square {new_sq} ({SQUARE_NAMES[new_sq]})")
-        else:
-            print("  Could not detect your move from image.")
+        if args.manual:
             while True:
                 raw = input("  Which square did you play? (1-9): ").strip()
                 if raw.isdigit() and int(raw) in range(1, 10) and board[int(raw)] is None:
@@ -451,6 +436,31 @@ while True:
                     print(f"  Recorded your piece at square {new_sq} ({SQUARE_NAMES[new_sq]})")
                     break
                 print("  Invalid or occupied square, try again.")
+        else:
+            input("  Press ENTER when done...")
+            print("  Waiting 2s for camera to settle...")
+            time.sleep(2.0)
+            print("  Reading board from image...")
+            curr_img = capture_board_image()
+            detected = read_board_from_image(curr_img)
+            new_sq = None
+            for sq in range(1, 10):
+                if detected[sq] == human_symbol and board[sq] is None:
+                    new_sq = sq
+                    break
+            if new_sq:
+                board[new_sq] = human_symbol
+                print(f"  Detected your piece at square {new_sq} ({SQUARE_NAMES[new_sq]})")
+            else:
+                print("  Could not detect your move from image.")
+                while True:
+                    raw = input("  Which square did you play? (1-9): ").strip()
+                    if raw.isdigit() and int(raw) in range(1, 10) and board[int(raw)] is None:
+                        new_sq = int(raw)
+                        board[new_sq] = human_symbol
+                        print(f"  Recorded your piece at square {new_sq} ({SQUARE_NAMES[new_sq]})")
+                        break
+                    print("  Invalid or occupied square, try again.")
         turn = "robot"
 
     else:
