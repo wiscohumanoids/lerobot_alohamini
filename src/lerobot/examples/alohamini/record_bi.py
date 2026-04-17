@@ -18,9 +18,44 @@ from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
 
 from datetime import datetime
 import argparse
+import shutil
 from pathlib import Path
 import threading
 import time
+
+
+def _init_delete_last_listener(events: dict):
+    """Start a pynput listener that flags events['delete_last_saved']=True on Down arrow."""
+    try:
+        from pynput import keyboard
+    except Exception:
+        return None
+
+    def on_press(key):
+        if key == keyboard.Key.down:
+            events["delete_last_saved"] = True
+
+    listener = keyboard.Listener(on_press=on_press)
+    listener.start()
+    return listener
+
+
+def _apply_queued_deletions(dataset: LeRobotDataset, deletion_queue: list[int]) -> LeRobotDataset:
+    """Re-encode the dataset once with all queued episodes removed. Returns the new dataset."""
+    from lerobot.datasets.dataset_tools import delete_episodes
+
+    original_root = dataset.root
+    old_root = Path(str(original_root) + "_old")
+    if old_root.exists():
+        shutil.rmtree(old_root)
+    shutil.move(str(original_root), str(old_root))
+    dataset.root = old_root
+    return delete_episodes(
+        dataset,
+        episode_indices=sorted(set(deletion_queue)),
+        output_dir=original_root,
+        repo_id=dataset.repo_id,
+    )
 
 
 def get_bi_teleop_action(
@@ -97,6 +132,7 @@ def main():
     parser.add_argument("--fps", type=int, default=30, help="Frames per second")
     parser.add_argument("--episode_time", type=int, default=20, help="Duration of each episode (seconds)")
     parser.add_argument("--reset_time", type=int, default=0, help="Reset duration between episodes (seconds)")
+    parser.add_argument("--rerecord_reset_time", type=int, default=10, help="Reset duration when rerecording an episode via left arrow (seconds)")
     parser.add_argument("--task_description", type=str, default="My task description4", help="Task description")
     parser.add_argument("--remote_ip", type=str, default="10.139.203.203", help="Robot host IP")
     parser.add_argument("--robot_id", type=str, default="lekiwi_host", help="Robot ID")
@@ -180,6 +216,10 @@ def main():
     keyboard.connect()
 
     listener, events = init_keyboard_listener()
+    events["delete_last_saved"] = False
+    delete_listener = _init_delete_last_listener(events)
+    deletion_queue: list[int] = []
+    last_saved_episode_idx: int | None = None
     if not args.disable_rerun:
         import os
         os.environ["LEROBOT_RERUN_MEMORY_LIMIT"] = "0%"   # no history kept in viewer memory
@@ -214,6 +254,15 @@ def main():
 
     try:
         while recorded_episodes < args.num_episodes and not events["stop_recording"]:
+            if events["delete_last_saved"]:
+                events["delete_last_saved"] = False
+                if last_saved_episode_idx is not None and last_saved_episode_idx not in deletion_queue:
+                    deletion_queue.append(last_saved_episode_idx)
+                    log_say(f"Episode {last_saved_episode_idx} queued for deletion")
+                    last_saved_episode_idx = None
+                else:
+                    log_say("No episode to delete or already queued")
+
             log_say(f"Recording episode {recorded_episodes + 1} of {args.num_episodes}")
 
             # === Main record loop ===
@@ -236,13 +285,14 @@ def main():
             if not events["stop_recording"] and (
                 (recorded_episodes < args.num_episodes - 1) or events["rerecord_episode"]
             ):
-                log_say("Reset the environment")
+                reset_seconds = args.rerecord_reset_time if events["rerecord_episode"] else args.reset_time
+                log_say(f"Reset the environment ({reset_seconds}s)")
                 record_loop(
                     robot=robot,
                     events=events,
                     fps=args.fps,
                 teleop=[leader_arm, keyboard],
-                control_time_s=args.reset_time,
+                control_time_s=reset_seconds,
                     single_task=args.task_description,
                     display_data=not args.disable_rerun,
                     display_compressed_images=True,
@@ -271,6 +321,7 @@ def main():
                 no_keyboard=not args.keyboard,
             )
             recorded_episodes += 1
+            last_saved_episode_idx = dataset.meta.total_episodes - 1
 
         # Save any episode that was fully recorded but not yet saved because
         # stop_recording was set before the loop body could reach save_episode.
@@ -290,6 +341,13 @@ def main():
                 no_keyboard=not args.keyboard,
             )
             recorded_episodes += 1
+            last_saved_episode_idx = dataset.meta.total_episodes - 1
+
+        if events["delete_last_saved"]:
+            events["delete_last_saved"] = False
+            if last_saved_episode_idx is not None and last_saved_episode_idx not in deletion_queue:
+                deletion_queue.append(last_saved_episode_idx)
+                log_say(f"Episode {last_saved_episode_idx} queued for deletion")
 
     except KeyboardInterrupt:
         print("\nKeyboardInterrupt received — saving and cleaning up...")
@@ -302,7 +360,12 @@ def main():
         # Always finalize so the parquet footer is properly written.
         log_say("Stop recording")
         listener.stop()
+        if delete_listener is not None:
+            delete_listener.stop()
         dataset.finalize()
+        if deletion_queue:
+            log_say(f"Applying {len(deletion_queue)} queued deletion(s): {sorted(set(deletion_queue))}. Re-encoding now")
+            dataset = _apply_queued_deletions(dataset, deletion_queue)
         dataset.push_to_hub()
 
         try:
