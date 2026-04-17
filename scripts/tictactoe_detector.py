@@ -1,6 +1,7 @@
 import argparse
 import sys
 import numpy as np
+import cv2
 from PIL import Image
 import matplotlib.pyplot as plt
 from scipy.ndimage import label, center_of_mass
@@ -28,21 +29,51 @@ def crop_to_board(img_array: np.ndarray) -> np.ndarray:
 #  Color matching
 # ─────────────────────────────────────────────
 
+
 def color_distance(pixel: np.ndarray, target: tuple[int, int, int]) -> float:
     return float(np.sqrt(np.sum((pixel.astype(float) - np.array(target)) ** 2)))
 
-def match_color(mean_pixel: np.ndarray,
-                x_color: tuple, o_color: tuple,
-                tolerance: float) -> str:
-    """Matches a piece to X or O based on color distance."""
-    distances = {
-        "X": color_distance(mean_pixel, x_color),
-        "O": color_distance(mean_pixel, o_color),
-    }
-    best_label = min(distances, key=distances.get)
+# def match_color(mean_pixel: np.ndarray,
+#                 x_color: tuple, o_color: tuple,
+#                 tolerance: float) -> str:
+#     """Matches a piece to X or O based on color distance."""
+#     distances = {
+#         "X": color_distance(mean_pixel, x_color),
+#         "O": color_distance(mean_pixel, o_color),
+#     }
+#     best_label = min(distances, key=distances.get)
     
-    if distances[best_label] <= tolerance:
-        return best_label
+#     if distances[best_label] <= tolerance:
+#         return best_label
+#     return "?"
+
+def match_color(crop):
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+
+    lower_yellow = np.array([20, 100, 100])
+    upper_yellow = np.array([30, 255, 255])
+
+    lower_red1 = np.array([0, 100, 100])
+    upper_red1 = np.array([10, 255, 255])
+    lower_red2 = np.array([160, 100, 100])
+    upper_red2 = np.array([180, 255, 255])
+
+    mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
+    mask_red = cv2.bitwise_or(
+        cv2.inRange(hsv, lower_red1, upper_red1), 
+        cv2.inRange(hsv, lower_red2, upper_red2)
+    )
+
+    red_count = cv2.countNonZero(mask_red)
+    yellow_count = cv2.countNonZero(mask_yellow)
+    
+    ratio = yellow_count / (red_count + 1e-6)
+
+    if ratio > 10:
+        return "O"
+    elif ratio < 0.1:
+        return "X"
+
     return "?"
 
 
@@ -140,8 +171,9 @@ def detect_board_scipy(image_path: str,
         piece_pixels = cropped[piece_mask]
         mean_color = piece_pixels.mean(axis=0)
         cy, cx = center_of_mass(piece_mask)
-        piece_label = match_color(mean_color, x_color, o_color, tolerance)
-        
+        # piece_label = match_color(mean_color, x_color, o_color, tolerance)
+        piece_label = match_color(piece_pixels)
+
         pieces.append({
             "cx": cx, "cy": cy, 
             "mean_color": mean_color, 
