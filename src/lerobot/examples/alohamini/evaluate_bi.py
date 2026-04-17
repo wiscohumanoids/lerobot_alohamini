@@ -177,10 +177,18 @@ def main():
         action="store_true",
         help="Keep the local eval dataset cache after a successful HuggingFace push (default: delete).",
     )
+    parser.add_argument(
+        "--record",
+        action="store_true",
+        help="Record rollouts to a dataset and push to HF. Default: inference-only, no recording.",
+    )
 
     args = parser.parse_args()
-    args.hf_dataset_id = _resolve_eval_dataset_id(args.hf_model_id, args.hf_dataset_id)
-    print(f"[info] Using hf_dataset_id: {args.hf_dataset_id}")
+    if args.record:
+        args.hf_dataset_id = _resolve_eval_dataset_id(args.hf_model_id, args.hf_dataset_id)
+        print(f"[info] Recording enabled. Using hf_dataset_id: {args.hf_dataset_id}")
+    else:
+        print("[info] Inference-only mode (no recording). Pass --record to save rollouts.")
 
     # === Robot config ===
     robot_config = LeKiwiClientConfig(remote_ip=args.remote_ip, id=args.robot_id)
@@ -211,20 +219,25 @@ def main():
     obs_features = hw_to_dataset_features(robot.observation_features, OBS_STR)
     dataset_features = {**action_features, **obs_features}
 
-    dataset = LeRobotDataset.create(
-        repo_id=args.hf_dataset_id,
-        fps=args.fps,
-        features=dataset_features,
-        robot_type=robot.name,
-        use_videos=True,
-        image_writer_threads=4,
-    )
+    if args.record:
+        dataset = LeRobotDataset.create(
+            repo_id=args.hf_dataset_id,
+            fps=args.fps,
+            features=dataset_features,
+            robot_type=robot.name,
+            use_videos=True,
+            image_writer_threads=4,
+        )
+        dataset_stats = dataset.meta.stats
+    else:
+        dataset = None
+        dataset_stats = None
 
     # === Policy Processors ===
     preprocessor, postprocessor = make_pre_post_processors(
         policy_cfg=policy.config,
         pretrained_path=args.hf_model_id,
-        dataset_stats=dataset.meta.stats,
+        dataset_stats=dataset_stats,
         preprocessor_overrides={"device_processor": {"device": str(policy.config.device)}},
     )
 
@@ -241,7 +254,8 @@ def main():
     recorded_episodes = 0
 
     while recorded_episodes < args.num_episodes and not events["stop_recording"]:
-        log_say(f"Running inference, recording eval episode {recorded_episodes + 1} of {args.num_episodes}")
+        action_word = "recording" if dataset is not None else "running"
+        log_say(f"Running inference, {action_word} episode {recorded_episodes + 1} of {args.num_episodes}")
 
         record_loop(
             robot=robot,
@@ -261,13 +275,14 @@ def main():
         )
 
         if not events["stop_recording"]:
-            run_task_with_live_preview(
-                task=dataset.save_episode,
-                robot=robot,
-                fps=args.fps,
-                display_data=display_data,
-                robot_observation_processor=robot_observation_processor,
-            )
+            if dataset is not None:
+                run_task_with_live_preview(
+                    task=dataset.save_episode,
+                    robot=robot,
+                    fps=args.fps,
+                    display_data=display_data,
+                    robot_observation_processor=robot_observation_processor,
+                )
             recorded_episodes += 1
 
             if recorded_episodes < args.num_episodes:
@@ -280,26 +295,27 @@ def main():
                     robot_observation_processor=robot_observation_processor,
                 )
 
-    log_say("Stop recording")
+    log_say("Stop")
     listener.stop()
-    run_task_with_live_preview(
-        task=dataset.finalize,
-        robot=robot,
-        fps=args.fps,
-        display_data=display_data,
-        robot_observation_processor=robot_observation_processor,
-    )
-    dataset_root = getattr(dataset, "root", None)
-    run_task_with_live_preview(
-        task=dataset.push_to_hub,
-        robot=robot,
-        fps=args.fps,
-        display_data=display_data,
-        robot_observation_processor=robot_observation_processor,
-    )
-    if not args.keep_local_dataset:
-        _delete_local_dataset(dataset_root)
-        print(f"[info] Deleted local eval dataset: {dataset_root}")
+    if dataset is not None:
+        run_task_with_live_preview(
+            task=dataset.finalize,
+            robot=robot,
+            fps=args.fps,
+            display_data=display_data,
+            robot_observation_processor=robot_observation_processor,
+        )
+        dataset_root = getattr(dataset, "root", None)
+        run_task_with_live_preview(
+            task=dataset.push_to_hub,
+            robot=robot,
+            fps=args.fps,
+            display_data=display_data,
+            robot_observation_processor=robot_observation_processor,
+        )
+        if not args.keep_local_dataset:
+            _delete_local_dataset(dataset_root)
+            print(f"[info] Deleted local eval dataset: {dataset_root}")
     robot.disconnect()
 
 
