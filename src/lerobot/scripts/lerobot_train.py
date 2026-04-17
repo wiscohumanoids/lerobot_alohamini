@@ -15,13 +15,16 @@
 # limitations under the License.
 import dataclasses
 import logging
+import shutil
 import time
 from contextlib import nullcontext
+from pathlib import Path
 from pprint import pformat
 from typing import Any
 
 import torch
 from accelerate import Accelerator
+from huggingface_hub import HfApi
 from termcolor import colored
 from torch.optim import Optimizer
 
@@ -54,6 +57,22 @@ from lerobot.utils.utils import (
     has_method,
     init_logging,
 )
+
+
+def _upload_checkpoint_to_hub(checkpoint_dir: Path, repo_id: str) -> None:
+    """Upload the pretrained_model/ subfolder of a checkpoint to the HF Hub model repo."""
+    api = HfApi()
+    api.create_repo(repo_id, exist_ok=True)
+    api.upload_folder(
+        folder_path=str(checkpoint_dir / "pretrained_model"),
+        repo_id=repo_id,
+        repo_type="model",
+    )
+
+
+def _delete_local_checkpoint(checkpoint_dir: Path) -> None:
+    """Remove a local checkpoint directory from disk."""
+    shutil.rmtree(checkpoint_dir)
 
 
 def update_policy(
@@ -465,6 +484,15 @@ def train(cfg: TrainPipelineConfig, accelerator: Accelerator | None = None):
                 prune_old_checkpoints(checkpoint_dir.parent, keep_last=1)
                 if wandb_logger:
                     wandb_logger.log_policy(checkpoint_dir)
+
+                if cfg.policy.push_to_hub:
+                    try:
+                        _upload_checkpoint_to_hub(checkpoint_dir, cfg.policy.repo_id)
+                        logging.info(f"Uploaded checkpoint step {step} to {cfg.policy.repo_id}")
+                        _delete_local_checkpoint(checkpoint_dir)
+                        logging.info(f"Deleted local checkpoint {checkpoint_dir}")
+                    except Exception as exc:
+                        logging.error(f"HF upload failed for step {step}: {exc}; keeping local copy")
 
             accelerator.wait_for_everyone()
 

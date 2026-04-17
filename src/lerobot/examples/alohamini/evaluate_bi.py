@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 
 import argparse
+import re
+import shutil
 import threading
 import time
+from pathlib import Path
+
+from huggingface_hub import HfApi
 
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
@@ -16,6 +21,52 @@ from lerobot.utils.control_utils import init_keyboard_listener
 from lerobot.utils.robot_utils import precise_sleep
 from lerobot.utils.utils import log_say
 from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
+
+
+def _ensure_eval_in_dataset_id(dataset_id: str) -> str:
+    """Append '_eval' to a dataset repo id if it is not already present."""
+    if "eval" in dataset_id.lower():
+        return dataset_id
+    return f"{dataset_id}_eval"
+
+
+def _list_existing_eval_versions(hf_model_id: str) -> list[int]:
+    """Return version numbers of existing `<hf_model_id>_eval_vN` datasets on HF Hub."""
+    if "/" not in hf_model_id:
+        raise ValueError(f"hf_model_id must include org/user prefix: {hf_model_id!r}")
+    author, model_name = hf_model_id.split("/", 1)
+    pattern = re.compile(
+        rf"^{re.escape(author)}/{re.escape(model_name)}_eval_v(\d+)$"
+    )
+    versions: list[int] = []
+    for dataset in HfApi().list_datasets(author=author):
+        match = pattern.match(dataset.id)
+        if match:
+            versions.append(int(match.group(1)))
+    return versions
+
+
+def _next_eval_dataset_id(hf_model_id: str) -> str:
+    """Compute the next auto-versioned eval dataset repo id for the given model."""
+    versions = _list_existing_eval_versions(hf_model_id)
+    next_version = max(versions, default=0) + 1
+    return f"{hf_model_id}_eval_v{next_version}"
+
+
+def _resolve_eval_dataset_id(hf_model_id: str, hf_dataset_id: str | None) -> str:
+    """Return the eval dataset repo id: auto-version if none supplied, else enforce '_eval'."""
+    if hf_dataset_id is None:
+        return _next_eval_dataset_id(hf_model_id)
+    return _ensure_eval_in_dataset_id(hf_dataset_id)
+
+
+def _delete_local_dataset(dataset_root: Path | None) -> None:
+    """Remove the local cache directory of a dataset after a successful HF push."""
+    if dataset_root is None:
+        return
+    path = Path(dataset_root)
+    if path.exists():
+        shutil.rmtree(path)
 
 
 def log_live_preview_frame(robot: LeKiwiClient, robot_observation_processor) -> None:
@@ -95,7 +146,12 @@ def main():
     parser.add_argument("--reset_time", type=int, default=10, help="Idle reset time between episodes in seconds")
     parser.add_argument("--task_description", type=str, default="My task description", help="Description of the task")
     parser.add_argument("--hf_model_id", type=str, required=True, help="HuggingFace model repo id")
-    parser.add_argument("--hf_dataset_id", type=str, required=True, help="HuggingFace dataset repo id")
+    parser.add_argument(
+        "--hf_dataset_id",
+        type=str,
+        default=None,
+        help="HuggingFace dataset repo id. If omitted, auto-versioned as <hf_model_id>_eval_vN.",
+    )
     parser.add_argument("--remote_ip", type=str, default="10.139.203.203", help="LeKiwi host IP address")
     parser.add_argument("--robot_id", type=str, default="lekiwi", help="Robot ID")
     parser.add_argument(
@@ -116,8 +172,15 @@ def main():
         choices=["DDPM", "DDIM"],
         help="Override noise scheduler type at inference (diffusion only). Use DDIM for faster inference.",
     )
+    parser.add_argument(
+        "--keep_local_dataset",
+        action="store_true",
+        help="Keep the local eval dataset cache after a successful HuggingFace push (default: delete).",
+    )
 
     args = parser.parse_args()
+    args.hf_dataset_id = _resolve_eval_dataset_id(args.hf_model_id, args.hf_dataset_id)
+    print(f"[info] Using hf_dataset_id: {args.hf_dataset_id}")
 
     # === Robot config ===
     robot_config = LeKiwiClientConfig(remote_ip=args.remote_ip, id=args.robot_id)
@@ -226,6 +289,7 @@ def main():
         display_data=display_data,
         robot_observation_processor=robot_observation_processor,
     )
+    dataset_root = getattr(dataset, "root", None)
     run_task_with_live_preview(
         task=dataset.push_to_hub,
         robot=robot,
@@ -233,6 +297,9 @@ def main():
         display_data=display_data,
         robot_observation_processor=robot_observation_processor,
     )
+    if not args.keep_local_dataset:
+        _delete_local_dataset(dataset_root)
+        print(f"[info] Deleted local eval dataset: {dataset_root}")
     robot.disconnect()
 
 
