@@ -1,0 +1,14 @@
+{
+  "arm_left_shoulder_pan.pos": -1.89010989010989,
+  "arm_left_shoulder_lift.pos": -103.34065934065934,
+  "arm_left_elbow_flex.pos": 96.35164835164835,
+  "arm_left_wrist_flex.pos": 72.79120879120879,
+  "arm_left_wrist_roll.pos": 0.6105006105006083,
+  "arm_left_gripper.pos": 1.4972419227738378,
+  "arm_right_shoulder_pan.pos": -5.142857142857143,
+  "arm_right_shoulder_lift.pos": -102.9010989010989,
+  "arm_right_elbow_flex.pos": 96.96703296703296,
+  "arm_right_wrist_flex.pos": 73.14285714285714,
+  "arm_right_wrist_roll.pos": -0.7570207570207543,
+  "arm_right_gripper.pos": 1.539708265802269
+}
