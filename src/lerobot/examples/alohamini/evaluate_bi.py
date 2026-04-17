@@ -69,6 +69,18 @@ def _delete_local_dataset(dataset_root: Path | None) -> None:
         shutil.rmtree(path)
 
 
+class _InferenceOnlyDatasetStub:
+    """Minimal dataset shim for inference-only mode: provides features/fps, no disk writes."""
+
+    def __init__(self, features: dict, fps: int) -> None:
+        self.features = features
+        self.fps = fps
+        self.image_writer = None
+
+    def add_frame(self, frame: dict) -> None:
+        return None
+
+
 def log_live_preview_frame(robot: LeKiwiClient, robot_observation_processor) -> None:
     observation = robot.get_observation()
     observation_processed = robot_observation_processor(observation)
@@ -230,7 +242,7 @@ def main():
         )
         dataset_stats = dataset.meta.stats
     else:
-        dataset = None
+        dataset = _InferenceOnlyDatasetStub(features=dataset_features, fps=args.fps)
         dataset_stats = None
 
     # === Policy Processors ===
@@ -254,7 +266,7 @@ def main():
     recorded_episodes = 0
 
     while recorded_episodes < args.num_episodes and not events["stop_recording"]:
-        action_word = "recording" if dataset is not None else "running"
+        action_word = "recording" if args.record else "running"
         log_say(f"Running inference, {action_word} episode {recorded_episodes + 1} of {args.num_episodes}")
 
         record_loop(
@@ -275,7 +287,7 @@ def main():
         )
 
         if not events["stop_recording"]:
-            if dataset is not None:
+            if args.record:
                 run_task_with_live_preview(
                     task=dataset.save_episode,
                     robot=robot,
@@ -297,7 +309,7 @@ def main():
 
     log_say("Stop")
     listener.stop()
-    if dataset is not None:
+    if args.record:
         run_task_with_live_preview(
             task=dataset.finalize,
             robot=robot,
