@@ -28,11 +28,31 @@ from lerobot.utils.runtime_config import (
     format_args_block,
     format_dataclass_block,
     print_runtime_banner,
-    validate_loop_freq_vs_cameras,
 )
 
 from .config_lekiwi import LeKiwiConfig, LeKiwiHostConfig
 from .lekiwi import LeKiwi
+
+
+def _max_camera_fps(cameras: dict) -> int:
+    """Return the highest fps among configured cameras, ignoring those with no fps set."""
+    fps_values = [cam.fps for cam in cameras.values() if cam.fps is not None]
+    if not fps_values:
+        raise ValueError("No camera with a configured fps was found.")
+    return max(fps_values)
+
+
+def _resolve_host_loop_freq(explicit_value: int | None, max_cam_fps: int) -> int:
+    """Return the host loop frequency: derive from cameras if None, else validate the override."""
+    if explicit_value is None:
+        return max_cam_fps
+    if explicit_value != max_cam_fps:
+        raise ValueError(
+            f"max_loop_freq_hz override ({explicit_value}) does not match max camera fps ({max_cam_fps}). "
+            f"Either remove the override (default None auto-derives from cameras) or also set every "
+            f"camera's fps to {explicit_value}."
+        )
+    return explicit_value
 
 
 class LeKiwiHost:
@@ -86,10 +106,9 @@ def main():
     robot_config.use_degrees = True
 
     host_config = LeKiwiHostConfig()
-
-    validate_loop_freq_vs_cameras(
+    host_config.max_loop_freq_hz = _resolve_host_loop_freq(
         host_config.max_loop_freq_hz,
-        (cam.fps for cam in robot_config.cameras.values() if cam.fps is not None),
+        _max_camera_fps(robot_config.cameras),
     )
 
     print_runtime_banner(

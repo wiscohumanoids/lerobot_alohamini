@@ -86,8 +86,10 @@ class LeKiwiHostConfig:
     # Watchdog: stop the robot if no command is received for over 3 seconds.
     watchdog_timeout_ms: int = 3000
 
-    # If robot jitters decrease the frequency and monitor cpu load with `top` in cmd
-    max_loop_freq_hz: int = 30
+    # If None (default), the host loop rate is auto-derived to match max camera fps at startup.
+    # Set explicitly only as a debug relief valve when CPU is overloaded; the host will then
+    # validate that your override equals max camera fps and refuse to start if it does not.
+    max_loop_freq_hz: int | None = None
 
 
 
