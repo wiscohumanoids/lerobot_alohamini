@@ -406,6 +406,35 @@ class LeKiwi(Robot):
         print("Calibration saved to", self.calibration_fpath)
 
 
+    def _apply_fresh_wrist_roll_homing(self) -> None:
+        """Compute and apply a homing offset for both wrist_roll motors from their current positions.
+
+        Unlike joints with mechanical stops, wrist_roll is a continuous-rotation joint
+        whose encoder angle is arbitrary at startup.  A saved homing offset becomes stale
+        the moment the wrist is moved while unpowered, so we re-home it every connect.
+        """
+        wrist_motors = {
+            self.left_bus: "arm_left_wrist_roll",
+            self.right_bus: "arm_right_wrist_roll",
+        }
+        for bus, motor in wrist_motors.items():
+            if motor not in bus.motors:
+                continue
+            bus.write("Homing_Offset", motor, 0)
+            pos = bus.read("Present_Position", motor, normalize=False)
+            offsets = bus._get_half_turn_homings({motor: pos})
+            bus.write("Homing_Offset", motor, offsets[motor])
+            if bus.calibration and motor in bus.calibration:
+                old = bus.calibration[motor]
+                bus.calibration[motor] = MotorCalibration(
+                    id=old.id,
+                    drive_mode=old.drive_mode,
+                    homing_offset=offsets[motor],
+                    range_min=old.range_min,
+                    range_max=old.range_max,
+                )
+            logger.info(f"Fresh {motor} homing applied: offset={offsets[motor]}")
+
     def configure(self):
         # Set-up arm actuators (position mode)
         # We assume that at connection time, arm is in a rest position,

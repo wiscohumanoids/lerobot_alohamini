@@ -18,17 +18,72 @@ from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
 
 from datetime import datetime
 import argparse
+import shutil
 from pathlib import Path
 import threading
 import time
 
 
+def _init_delete_last_listener(events: dict):
+    """Start a pynput listener that flags events['delete_last_saved']=True on Down arrow."""
+    try:
+        from pynput import keyboard
+    except Exception:
+        return None
+
+    def on_press(key):
+        if key == keyboard.Key.down:
+            events["delete_last_saved"] = True
+
+    listener = keyboard.Listener(on_press=on_press)
+    listener.start()
+    return listener
+
+
+def _apply_queued_deletions(dataset: LeRobotDataset, deletion_queue: list[int]) -> LeRobotDataset:
+    """Re-encode the dataset once with all queued episodes removed. Returns the new dataset."""
+    from lerobot.datasets.dataset_tools import delete_episodes
+
+    original_root = dataset.root
+    old_root = Path(str(original_root) + "_old")
+    if old_root.exists():
+        shutil.rmtree(old_root)
+    shutil.move(str(original_root), str(old_root))
+    dataset.root = old_root
+    return delete_episodes(
+        dataset,
+        episode_indices=sorted(set(deletion_queue)),
+        output_dir=original_root,
+        repo_id=dataset.repo_id,
+    )
+
+
+def get_bi_teleop_action(
+    robot: LeKiwiClient,
+    leader_arm: BiSOLeader,
+    keyboard: KeyboardTeleop,
+    no_keyboard: bool = True,
+) -> dict[str, float]:
+    """Collect the current bi-arm and keyboard teleop command."""
+    arm_action = leader_arm.get_action()
+    arm_action = {f"arm_{k}": v for k, v in arm_action.items()}
+    keyboard_action = keyboard.get_action() if not no_keyboard else {}
+    base_action = robot._from_keyboard_to_base_action(keyboard_action)
+    lift_action = robot._from_keyboard_to_lift_action(keyboard_action)
+    return {**arm_action, **base_action, **lift_action}
+
+
 def save_episode_with_live_preview(
     dataset: LeRobotDataset,
     robot: LeKiwiClient,
+    leader_arm: BiSOLeader,
+    keyboard: KeyboardTeleop,
     fps: int,
     display_data: bool,
+    teleop_action_processor,
+    robot_action_processor,
     robot_observation_processor,
+    no_keyboard: bool = True,
 ) -> None:
     """Save episode while continuously updating rerun camera preview."""
     save_done = threading.Event()
@@ -47,10 +102,19 @@ def save_episode_with_live_preview(
 
     while not save_done.is_set():
         loop_start = time.perf_counter()
+        observation = robot.get_observation()
+        teleop_action = get_bi_teleop_action(robot, leader_arm, keyboard, no_keyboard=no_keyboard)
+        teleop_action_processed = teleop_action_processor((teleop_action, observation))
+        robot_action = robot_action_processor((teleop_action_processed, observation))
+        robot.send_action(robot_action)
+
         if display_data:
-            observation = robot.get_observation()
             observation_processed = robot_observation_processor(observation)
-            log_rerun_data(observation=observation_processed, action=None, compress_images=True)
+            log_rerun_data(
+                observation=observation_processed,
+                action=teleop_action_processed,
+                compress_images=True,
+            )
 
         dt_s = time.perf_counter() - loop_start
         sleep_s = max(1.0 / fps - dt_s, 0.0)
@@ -64,12 +128,13 @@ def main():
     parser = argparse.ArgumentParser(description="Record episodes with bi-arm teleoperation")
     parser.add_argument("--dataset", type=str, required=True,
                     help="Dataset repo_id, e.g. liyitenga/record_20250914225057")
-    parser.add_argument("--num_episodes", type=int, default=1, help="Number of episodes to record")
+    parser.add_argument("--num_episodes", type=int, default=100, help="Number of episodes to record")
     parser.add_argument("--fps", type=int, default=30, help="Frames per second")
-    parser.add_argument("--episode_time", type=int, default=60, help="Duration of each episode (seconds)")
-    parser.add_argument("--reset_time", type=int, default=10, help="Reset duration between episodes (seconds)")
+    parser.add_argument("--episode_time", type=int, default=20, help="Duration of each episode (seconds)")
+    parser.add_argument("--reset_time", type=int, default=0, help="Reset duration between episodes (seconds)")
+    parser.add_argument("--rerecord_reset_time", type=int, default=10, help="Reset duration when rerecording an episode via left arrow (seconds)")
     parser.add_argument("--task_description", type=str, default="My task description4", help="Task description")
-    parser.add_argument("--remote_ip", type=str, default="192.168.55.1", help="Robot host IP")
+    parser.add_argument("--remote_ip", type=str, default="10.139.203.203", help="Robot host IP")
     parser.add_argument("--robot_id", type=str, default="lekiwi_host", help="Robot ID")
     parser.add_argument("--leader_id", type=str, default="so101_leader_bi", help="Leader arm device ID")
     parser.add_argument(
@@ -91,13 +156,15 @@ def main():
         action="store_true",
         help="Disable rerun visualization to avoid native viewer crashes on macOS.",
     )
+    parser.add_argument("--rerun_port", type=int, default=9091, help="Port of the running rerun web-viewer")
+    parser.add_argument("--keyboard", action="store_true", default=False, help="Enable keyboard teleop for base/lift control")
     parser.add_argument("--setup_time", type=int, default=15, help="Initial setup time in seconds before first episode")
     parser.add_argument("--resume", action="store_true", help="Resume recording on existing dataset")
 
     args = parser.parse_args()
 
     # === Robot and teleop config ===
-    robot_config = LeKiwiClientConfig(remote_ip=args.remote_ip, id=args.robot_id)
+    robot_config = LeKiwiClientConfig(remote_ip=args.remote_ip, id=args.robot_id, no_keyboard=not args.keyboard)
     leader_arm_config = BiSOLeaderConfig(
         left_arm_config=SOLeaderConfig(
             port="/dev/cu.usbmodem5B140323471",
@@ -149,8 +216,15 @@ def main():
     keyboard.connect()
 
     listener, events = init_keyboard_listener()
+    events["delete_last_saved"] = False
+    delete_listener = _init_delete_last_listener(events)
+    deletion_queue: list[int] = []
+    last_saved_episode_idx: int | None = None
     if not args.disable_rerun:
-        init_rerun(session_name="lekiwi_record", ip="127.0.0.1", port=9091)
+        import os
+        os.environ["LEROBOT_RERUN_MEMORY_LIMIT"] = "0%"   # no history kept in viewer memory
+        os.environ["RERUN_FLUSH_NUM_BYTES"] = "0"           # flush every log call immediately
+        init_rerun(session_name="lekiwi_record", ip="localhost", port=args.rerun_port)
 
     if not robot.is_connected or not leader_arm.is_connected or not keyboard.is_connected:
         raise ValueError("Robot or teleop is not connected!")
@@ -178,36 +252,27 @@ def main():
 
     recorded_episodes = 0
 
-    while recorded_episodes < args.num_episodes and not events["stop_recording"]:
-        log_say(f"Recording episode {recorded_episodes + 1} of {args.num_episodes}")
+    try:
+        while recorded_episodes < args.num_episodes and not events["stop_recording"]:
+            if events["delete_last_saved"]:
+                events["delete_last_saved"] = False
+                if last_saved_episode_idx is not None and last_saved_episode_idx not in deletion_queue:
+                    deletion_queue.append(last_saved_episode_idx)
+                    log_say(f"Episode {last_saved_episode_idx} queued for deletion")
+                    last_saved_episode_idx = None
+                else:
+                    log_say("No episode to delete or already queued")
 
-        # === Main record loop ===
-        record_loop(
-            robot=robot,
-            events=events,
-            fps=args.fps,
-            dataset=dataset,
-            teleop=[leader_arm, keyboard],
-            control_time_s=args.episode_time,
-            single_task=args.task_description,
-            display_data=not args.disable_rerun,
-            display_compressed_images=True,
-            teleop_action_processor=teleop_action_processor,
-            robot_action_processor=robot_action_processor,
-            robot_observation_processor=robot_observation_processor,
-        )
+            log_say(f"Recording episode {recorded_episodes + 1} of {args.num_episodes}")
 
-        # === Reset environment ===
-        if not events["stop_recording"] and (
-            (recorded_episodes < args.num_episodes - 1) or events["rerecord_episode"]
-        ):
-            log_say("Reset the environment")
+            # === Main record loop ===
             record_loop(
                 robot=robot,
                 events=events,
                 fps=args.fps,
+                dataset=dataset,
                 teleop=[leader_arm, keyboard],
-                control_time_s=args.reset_time,
+                control_time_s=args.episode_time,
                 single_task=args.task_description,
                 display_data=not args.disable_rerun,
                 display_compressed_images=True,
@@ -216,40 +281,105 @@ def main():
                 robot_observation_processor=robot_observation_processor,
             )
 
-        if events["rerecord_episode"]:
-            log_say("Re-record episode")
-            events["rerecord_episode"] = False
-            events["exit_early"] = False
+            # === Reset environment ===
+            if not events["stop_recording"] and (
+                (recorded_episodes < args.num_episodes - 1) or events["rerecord_episode"]
+            ):
+                reset_seconds = args.rerecord_reset_time if events["rerecord_episode"] else args.reset_time
+                log_say(f"Reset the environment ({reset_seconds}s)")
+                record_loop(
+                    robot=robot,
+                    events=events,
+                    fps=args.fps,
+                teleop=[leader_arm, keyboard],
+                control_time_s=reset_seconds,
+                    single_task=args.task_description,
+                    display_data=not args.disable_rerun,
+                    display_compressed_images=True,
+                    teleop_action_processor=teleop_action_processor,
+                    robot_action_processor=robot_action_processor,
+                    robot_observation_processor=robot_observation_processor,
+                )
+
+            if events["rerecord_episode"]:
+                log_say("Re-record episode")
+                events["rerecord_episode"] = False
+                events["exit_early"] = False
+                dataset.clear_episode_buffer()
+                continue
+
+            save_episode_with_live_preview(
+                dataset=dataset,
+                robot=robot,
+                leader_arm=leader_arm,
+                keyboard=keyboard,
+                fps=args.fps,
+                display_data=not args.disable_rerun,
+                teleop_action_processor=teleop_action_processor,
+                robot_action_processor=robot_action_processor,
+                robot_observation_processor=robot_observation_processor,
+                no_keyboard=not args.keyboard,
+            )
+            recorded_episodes += 1
+            last_saved_episode_idx = dataset.meta.total_episodes - 1
+
+        # Save any episode that was fully recorded but not yet saved because
+        # stop_recording was set before the loop body could reach save_episode.
+        pending_frames = len(dataset.episode_buffer.get("frame_index", []))
+        if pending_frames > 0:
+            log_say(f"Saving pending episode ({pending_frames} frames) before exit")
+            save_episode_with_live_preview(
+                dataset=dataset,
+                robot=robot,
+                leader_arm=leader_arm,
+                keyboard=keyboard,
+                fps=args.fps,
+                display_data=not args.disable_rerun,
+                teleop_action_processor=teleop_action_processor,
+                robot_action_processor=robot_action_processor,
+                robot_observation_processor=robot_observation_processor,
+                no_keyboard=not args.keyboard,
+            )
+            recorded_episodes += 1
+            last_saved_episode_idx = dataset.meta.total_episodes - 1
+
+        if events["delete_last_saved"]:
+            events["delete_last_saved"] = False
+            if last_saved_episode_idx is not None and last_saved_episode_idx not in deletion_queue:
+                deletion_queue.append(last_saved_episode_idx)
+                log_say(f"Episode {last_saved_episode_idx} queued for deletion")
+
+    except KeyboardInterrupt:
+        print("\nKeyboardInterrupt received — saving and cleaning up...")
+        pending_frames = len(dataset.episode_buffer.get("frame_index", []))
+        if pending_frames > 0:
+            print(f"Discarding incomplete episode ({pending_frames} frames).")
             dataset.clear_episode_buffer()
-            continue
 
-        save_episode_with_live_preview(
-            dataset=dataset,
-            robot=robot,
-            fps=args.fps,
-            display_data=not args.disable_rerun,
-            robot_observation_processor=robot_observation_processor,
-        )
-        recorded_episodes += 1
+    finally:
+        # Always finalize so the parquet footer is properly written.
+        log_say("Stop recording")
+        listener.stop()
+        if delete_listener is not None:
+            delete_listener.stop()
+        dataset.finalize()
+        if deletion_queue:
+            log_say(f"Applying {len(deletion_queue)} queued deletion(s): {sorted(set(deletion_queue))}. Re-encoding now")
+            dataset = _apply_queued_deletions(dataset, deletion_queue)
+        dataset.push_to_hub()
 
-    # === Clean up ===
-    log_say("Stop recording")
-    listener.stop()
-    dataset.finalize()
-    dataset.push_to_hub()
-
-    try:
-        robot.disconnect()
-    except DeviceNotConnectedError:
-        pass
-    try:
-        leader_arm.disconnect()
-    except DeviceNotConnectedError:
-        pass
-    try:
-        keyboard.disconnect()
-    except DeviceNotConnectedError:
-        pass
+        try:
+            robot.disconnect()
+        except DeviceNotConnectedError:
+            pass
+        try:
+            leader_arm.disconnect()
+        except DeviceNotConnectedError:
+            pass
+        try:
+            keyboard.disconnect()
+        except DeviceNotConnectedError:
+            pass
 
 
 if __name__ == "__main__":

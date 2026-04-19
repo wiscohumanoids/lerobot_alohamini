@@ -18,6 +18,7 @@ import base64
 import inspect
 import json
 import logging
+import time
 from functools import cached_property
 import os
 from typing import Any
@@ -80,6 +81,9 @@ class LeKiwiClient(Robot):
 
         self._is_connected = False
         self.logs = {}
+
+        self._last_fresh_obs_at = 0.0
+        self._stale_log_threshold_s = 0.1
 
     @cached_property
     def _state_ft(self) -> dict[str, type]:
@@ -252,15 +256,15 @@ class LeKiwiClient(Robot):
 
         # 2. If no message, return cached data
         if latest_message_str is None:
+            self._warn_if_stale()
             return self.last_frames, self.last_remote_state
 
         # 3. Parse the JSON message
         observation = self._parse_observation_json(latest_message_str)
 
-        
-
         # 4. If JSON parsing failed, return cached data
         if observation is None:
+            self._warn_if_stale()
             return self.last_frames, self.last_remote_state
 
         # 5. Process the valid observation data
@@ -268,12 +272,21 @@ class LeKiwiClient(Robot):
             new_frames, new_state = self._remote_state_from_obs(observation)
         except Exception as e:
             logging.error(f"Error processing observation data, serving last observation: {e}")
+            self._warn_if_stale()
             return self.last_frames, self.last_remote_state
 
         self.last_frames.update(new_frames)
         self.last_remote_state = new_state
+        self._last_fresh_obs_at = time.monotonic()
 
         return self.last_frames, new_state
+
+    def _warn_if_stale(self) -> None:
+        if self._last_fresh_obs_at == 0.0:
+            return
+        age = time.monotonic() - self._last_fresh_obs_at
+        if age > self._stale_log_threshold_s:
+            logging.warning("stale observation: %.0f ms since last fresh ZMQ message", age * 1000)
 
     @check_if_not_connected
     def get_observation(self) -> RobotObservation:
@@ -295,6 +308,8 @@ class LeKiwiClient(Robot):
         return obs_dict
 
     def _from_keyboard_to_base_action(self, pressed_keys: np.ndarray):
+        if self.config.no_keyboard:
+            return {"x.vel": 0.0, "y.vel": 0.0, "theta.vel": 0.0}
         # Speed control
         if self.teleop_keys["speed_up"] in pressed_keys:
             self.speed_index = min(self.speed_index + 1, 2)
@@ -345,6 +360,9 @@ class LeKiwiClient(Robot):
 
     # lift_axis.height_mm
     def _from_keyboard_to_lift_action(self, pressed_keys: np.ndarray):
+        if self.config.no_keyboard:
+            h_now = float(self.last_remote_state.get("lift_axis.height_mm", 0.0))
+            return {"lift_axis.height_mm": h_now}
         up_pressed = self.teleop_keys.get("lift_up", "u") in pressed_keys
         dn_pressed = self.teleop_keys.get("lift_down", "j") in pressed_keys
         now_pressed = up_pressed or dn_pressed

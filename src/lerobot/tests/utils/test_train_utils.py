@@ -15,7 +15,11 @@
 # limitations under the License.
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
+
+import pytest
+import torch
 
 from lerobot.utils.constants import (
     CHECKPOINTS_DIR,
@@ -32,6 +36,8 @@ from lerobot.utils.train_utils import (
     get_step_identifier,
     load_training_state,
     load_training_step,
+    preflight_checkpointing,
+    prune_old_checkpoints,
     save_checkpoint,
     save_training_state,
     save_training_step,
@@ -112,3 +118,32 @@ def test_save_load_training_state(tmp_path, optimizer, scheduler):
     assert loaded_step == 10
     assert loaded_optimizer is optimizer
     assert loaded_scheduler is scheduler
+
+
+def test_prune_old_checkpoints_keeps_latest(tmp_path):
+    checkpoints_dir = tmp_path / CHECKPOINTS_DIR
+    old_checkpoint = checkpoints_dir / "000005"
+    new_checkpoint = checkpoints_dir / "000010"
+    old_checkpoint.mkdir(parents=True)
+    new_checkpoint.mkdir(parents=True)
+    (old_checkpoint / "marker.txt").write_text("old")
+    (new_checkpoint / "marker.txt").write_text("new")
+
+    deleted = prune_old_checkpoints(checkpoints_dir, keep_last=1)
+
+    assert deleted == [old_checkpoint]
+    assert not old_checkpoint.exists()
+    assert new_checkpoint.exists()
+
+
+@patch("lerobot.utils.train_utils.ensure_last_checkpoint_symlink_supported")
+@patch("lerobot.utils.train_utils.shutil.disk_usage")
+def test_preflight_checkpointing_raises_when_disk_is_too_small(
+    mock_disk_usage, mock_symlink_supported, tmp_path, optimizer
+):
+    policy = Mock()
+    policy.state_dict.return_value = {"weight": torch.zeros(1024, 1024)}
+    mock_disk_usage.return_value = SimpleNamespace(free=1)
+
+    with pytest.raises(RuntimeError, match="not enough free disk space"):
+        preflight_checkpointing(tmp_path, policy, optimizer)

@@ -15,13 +15,16 @@
 # limitations under the License.
 import dataclasses
 import logging
+import shutil
 import time
 from contextlib import nullcontext
+from pathlib import Path
 from pprint import pformat
 from typing import Any
 
 import torch
 from accelerate import Accelerator
+from huggingface_hub import HfApi
 from termcolor import colored
 from torch.optim import Optimizer
 
@@ -44,6 +47,8 @@ from lerobot.utils.train_utils import (
     get_step_checkpoint_dir,
     get_step_identifier,
     load_training_state,
+    preflight_checkpointing,
+    prune_old_checkpoints,
     save_checkpoint,
     update_last_checkpoint,
 )
@@ -52,6 +57,22 @@ from lerobot.utils.utils import (
     has_method,
     init_logging,
 )
+
+
+def _upload_checkpoint_to_hub(checkpoint_dir: Path, repo_id: str) -> None:
+    """Upload the pretrained_model/ subfolder of a checkpoint to the HF Hub model repo."""
+    api = HfApi()
+    api.create_repo(repo_id, exist_ok=True)
+    api.upload_folder(
+        folder_path=str(checkpoint_dir / "pretrained_model"),
+        repo_id=repo_id,
+        repo_type="model",
+    )
+
+
+def _delete_local_checkpoint(checkpoint_dir: Path) -> None:
+    """Remove a local checkpoint directory from disk."""
+    shutil.rmtree(checkpoint_dir)
 
 
 def update_policy(
@@ -316,6 +337,13 @@ def train(cfg: TrainPipelineConfig, accelerator: Accelerator | None = None):
     if cfg.resume:
         step, optimizer, lr_scheduler = load_training_state(cfg.checkpoint_path, optimizer, lr_scheduler)
 
+    if cfg.save_checkpoint and is_main_process:
+        preflight_checkpointing(
+            output_dir=cfg.output_dir,
+            policy=accelerator.unwrap_model(policy),
+            optimizer=optimizer,
+        )
+
     num_learnable_params = sum(p.numel() for p in policy.parameters() if p.requires_grad)
     num_total_params = sum(p.numel() for p in policy.parameters())
 
@@ -453,8 +481,18 @@ def train(cfg: TrainPipelineConfig, accelerator: Accelerator | None = None):
                     postprocessor=postprocessor,
                 )
                 update_last_checkpoint(checkpoint_dir)
+                prune_old_checkpoints(checkpoint_dir.parent, keep_last=1)
                 if wandb_logger:
                     wandb_logger.log_policy(checkpoint_dir)
+
+                if cfg.policy.push_to_hub:
+                    try:
+                        _upload_checkpoint_to_hub(checkpoint_dir, cfg.policy.repo_id)
+                        logging.info(f"Uploaded checkpoint step {step} to {cfg.policy.repo_id}")
+                        _delete_local_checkpoint(checkpoint_dir)
+                        logging.info(f"Deleted local checkpoint {checkpoint_dir}")
+                    except Exception as exc:
+                        logging.error(f"HF upload failed for step {step}: {exc}; keeping local copy")
 
             accelerator.wait_for_everyone()
 
@@ -528,8 +566,23 @@ def train(cfg: TrainPipelineConfig, accelerator: Accelerator | None = None):
 
 
 def main():
+    import sys
+    import traceback
+    from pathlib import Path
+    from datetime import datetime
+
+    log_path = Path("training_error.log")
     register_third_party_plugins()
-    train()
+    try:
+        train()
+    except Exception:
+        error_msg = traceback.format_exc()
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(log_path, "a") as f:
+            f.write(f"\n{'='*60}\n{timestamp}\n{'='*60}\n")
+            f.write(error_msg)
+        print(f"\nTRAINING CRASHED. Full error saved to: {log_path.resolve()}", file=sys.stderr)
+        raise
 
 
 if __name__ == "__main__":

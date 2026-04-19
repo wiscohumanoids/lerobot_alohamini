@@ -74,3 +74,28 @@ lerobot-train ^
 
 Command for rerun:
 `rerun --web-viewer-port 9091`
+
+## Git identity on the shared Jetson
+
+If you want to login to your GitHub account on the Jetson Orin Nano to make code changes and commit, make sure to logout later.
+Before committing, set yourself as the author. After you're done, log out so the next teammate doesn't push code under your name.
+
+### Check who you are
+```bash
+git config --get user.name
+git config --get user.email
+```
+### Login and Logout
+
+Before logging in, make sure you have your GitHub SSH key of your personal account, and then run:
+```bash
+git config --local user.name  "Your Name"
+git config --local user.email "you@example.com"
+```
+
+Once you complete your session of using the Jetson, remove the SSH key and logout:
+```bash
+ssh-add -D
+git config --local --unset user.name
+git config --local --unset user.email
+```

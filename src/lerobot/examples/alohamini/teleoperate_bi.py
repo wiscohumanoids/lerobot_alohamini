@@ -14,9 +14,12 @@ from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
 parser = argparse.ArgumentParser()
 parser.add_argument("--no_robot", action="store_true", help="Do not connect robot, only print actions")
 parser.add_argument("--no_leader", action="store_true", help="Do not connect leader arm, only perform keyboard-controlled actions.")
+parser.add_argument("--keyboard", action="store_true", default=False, help="Enable keyboard teleop for base/lift control")
 parser.add_argument("--fps", type=int, default=30, help="Main loop frequency (frames per second)")
-parser.add_argument("--remote_ip", type=str, default="192.168.55.1", help="LeKiwi host IP address")
+parser.add_argument("--remote_ip", type=str, default="10.139.203.203", help="LeKiwi host IP address")
 parser.add_argument("--leader_id", type=str, default="so101_leader_bi", help="Leader arm device ID")
+parser.add_argument("--use_rerun", action="store_true", default=True, help="Enable rerun teleop vis")
+parser.add_argument("--rerun_port", type=int, default=9091, help="Port of the running rerun web-viewer")
 parser.add_argument(
     "--arm_profile",
     type=str,
@@ -27,8 +30,10 @@ parser.add_argument(
 
 args = parser.parse_args()
 
+USE_RERUN = args.use_rerun
 NO_ROBOT = args.no_robot
 NO_LEADER = args.no_leader
+NO_KEYBOARD = not args.keyboard
 FPS = args.fps
 # ========================================== #
 
@@ -38,15 +43,15 @@ if NO_ROBOT:
 if NO_LEADER:
     print("🧪 NO_LEADER mode enabled: leader arm will not connect, only print actions.")
 # Create configs
-robot_config = LeKiwiClientConfig(remote_ip=args.remote_ip, id="my_alohamini")
+robot_config = LeKiwiClientConfig(remote_ip=args.remote_ip, id="my_alohamini", no_keyboard=NO_KEYBOARD)
 bi_cfg = BiSOLeaderConfig(
     left_arm_config=SOLeaderConfig(
-        port="/dev/cu.usbmodem5B140323471",  # Change this
+        port="/dev/cu.usbmodem5B140323471",
         arm_profile=args.arm_profile,
         use_degrees=True,
     ),
     right_arm_config=SOLeaderConfig(
-        port="/dev/cu.usbmodem5B140330511",  # Change this
+        port="/dev/cu.usbmodem5B140330511",
         arm_profile=args.arm_profile,
         use_degrees=True,
     ),
@@ -68,13 +73,18 @@ if not NO_LEADER:
 else:
     print("🧪 robot.connect() skipped, only printing actions.")
 
-keyboard.connect()
+if not NO_KEYBOARD:
+    keyboard.connect()
 
 
 
-init_rerun(session_name="lekiwi_teleop")
+os.environ["LEROBOT_RERUN_MEMORY_LIMIT"] = "0%"   # no history kept in viewer memory
+os.environ["RERUN_FLUSH_NUM_BYTES"] = "0"           # flush every log call immediately
 
-if not robot.is_connected or not leader.is_connected or not keyboard.is_connected:
+if USE_RERUN:
+    init_rerun(session_name="lekiwi_teleop", ip="localhost", port=args.rerun_port)
+
+if not robot.is_connected or not leader.is_connected or (not NO_KEYBOARD and not keyboard.is_connected):
     print("⚠️ Warning: Some devices are not connected! Still running for debug.")
 
 # Main loop
@@ -84,12 +94,12 @@ while True:
     observation = robot.get_observation() if not NO_ROBOT else {}
     arm_actions = leader.get_action() if not NO_LEADER else {}
     arm_actions = {f"arm_{k}": v for k, v in arm_actions.items()}
-    keyboard_keys = keyboard.get_action()
+    keyboard_keys = keyboard.get_action() if not NO_KEYBOARD else {}
     base_action = robot._from_keyboard_to_base_action(keyboard_keys)
     lift_action = robot._from_keyboard_to_lift_action(keyboard_keys)
 
     action = {**arm_actions, **base_action, **lift_action}
-    log_rerun_data(observation, action)
+    log_rerun_data(observation, action, compress_images=True)
 
     if not NO_ROBOT:
         robot.send_action(action)
