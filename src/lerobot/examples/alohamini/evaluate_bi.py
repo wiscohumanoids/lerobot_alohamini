@@ -16,7 +16,7 @@ from lerobot.policies.factory import get_policy_class, make_pre_post_processors
 from lerobot.processor import make_default_processors
 from lerobot.robots.alohamini import LeKiwiClient, LeKiwiClientConfig
 from lerobot.scripts.lerobot_record import record_loop
-from lerobot.utils.constants import ACTION, OBS_STR
+from lerobot.utils.constants import ACTION, HF_LEROBOT_HOME, OBS_STR
 from lerobot.utils.control_utils import init_keyboard_listener
 from lerobot.utils.robot_utils import precise_sleep
 from lerobot.utils.utils import log_say
@@ -46,9 +46,29 @@ def _list_existing_eval_versions(hf_model_id: str) -> list[int]:
     return versions
 
 
+def _list_existing_local_eval_versions(hf_model_id: str) -> list[int]:
+    """Return version numbers of local `<hf_model_id>_eval_vN` dataset cache directories."""
+    if "/" not in hf_model_id:
+        raise ValueError(f"hf_model_id must include org/user prefix: {hf_model_id!r}")
+    author, model_name = hf_model_id.split("/", 1)
+    author_root = HF_LEROBOT_HOME / author
+    if not author_root.exists():
+        return []
+
+    pattern = re.compile(rf"^{re.escape(model_name)}_eval_v(\d+)$")
+    versions: list[int] = []
+    for path in author_root.iterdir():
+        if not path.is_dir():
+            continue
+        match = pattern.match(path.name)
+        if match:
+            versions.append(int(match.group(1)))
+    return versions
+
+
 def _next_eval_dataset_id(hf_model_id: str) -> str:
     """Compute the next auto-versioned eval dataset repo id for the given model."""
-    versions = _list_existing_eval_versions(hf_model_id)
+    versions = _list_existing_eval_versions(hf_model_id) + _list_existing_local_eval_versions(hf_model_id)
     next_version = max(versions, default=0) + 1
     return f"{hf_model_id}_eval_v{next_version}"
 
