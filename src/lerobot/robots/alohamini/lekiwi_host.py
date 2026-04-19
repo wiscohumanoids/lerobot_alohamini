@@ -106,7 +106,7 @@ def main():
                 else:
                     #print(f"Received action: {data}")   # debug
                     _action_sent = robot.send_action(data)
-                
+
                 last_cmd_time = time.time()
                 watchdog_active = False
             except zmq.Again:
@@ -123,13 +123,13 @@ def main():
                 robot.stop_base()
                 robot.disable_arm_torque()
 
-            
+
             last_observation = robot.get_observation()
 
             # Encode ndarrays to base64 strings
             for cam_key, _ in robot.cameras.items():
                 ret, buffer = cv2.imencode(
-                    ".jpg", last_observation[cam_key], [int(cv2.IMWRITE_JPEG_QUALITY), 90]
+                    ".jpg", last_observation[cam_key], [int(cv2.IMWRITE_JPEG_QUALITY), 60]
                 )
                 if ret:
                     last_observation[cam_key] = base64.b64encode(buffer).decode("utf-8")
