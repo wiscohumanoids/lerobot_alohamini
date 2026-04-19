@@ -19,6 +19,12 @@ from lerobot.scripts.lerobot_record import record_loop
 from lerobot.utils.constants import ACTION, HF_LEROBOT_HOME, OBS_STR
 from lerobot.utils.control_utils import init_keyboard_listener
 from lerobot.utils.robot_utils import precise_sleep
+from lerobot.utils.runtime_config import (
+    format_args_block,
+    format_dataclass_block,
+    print_runtime_banner,
+    validate_client_fps_vs_cameras,
+)
 from lerobot.utils.utils import log_say
 from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
 
@@ -220,6 +226,11 @@ def main():
         action="store_true",
         help="Record rollouts to a dataset and push to HF. Default: inference-only, no recording.",
     )
+    parser.add_argument(
+        "--no-confirm",
+        action="store_true",
+        help="Skip the runtime config confirmation prompt.",
+    )
 
     args = parser.parse_args()
     if args.record:
@@ -230,6 +241,18 @@ def main():
 
     # === Robot config ===
     robot_config = LeKiwiClientConfig(remote_ip=args.remote_ip, id=args.robot_id)
+
+    validate_client_fps_vs_cameras(
+        args.fps,
+        (cam.fps for cam in robot_config.cameras.values() if cam.fps is not None),
+    )
+
+    print_runtime_banner(
+        format_args_block("CLI args", args, parser),
+        format_dataclass_block("LeKiwiClientConfig", robot_config),
+        require_confirm=not args.no_confirm,
+    )
+
     robot = LeKiwiClient(robot_config)
     robot.connect()
 

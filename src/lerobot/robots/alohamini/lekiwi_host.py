@@ -24,6 +24,13 @@ import sys
 import cv2
 import zmq
 
+from lerobot.utils.runtime_config import (
+    format_args_block,
+    format_dataclass_block,
+    print_runtime_banner,
+    validate_loop_freq_vs_cameras,
+)
+
 from .config_lekiwi import LeKiwiConfig, LeKiwiHostConfig
 from .lekiwi import LeKiwi
 
@@ -65,6 +72,11 @@ def main():
         choices=["left", "right", "both"],
         help="Calibration scope used when you choose to run calibration from the startup prompt.",
     )
+    parser.add_argument(
+        "--no-confirm",
+        action="store_true",
+        help="Skip the runtime config confirmation prompt.",
+    )
     args = parser.parse_args()
 
     logging.info("Configuring LeKiwi")
@@ -72,14 +84,27 @@ def main():
     robot_config.id = "AlohaMiniRobot"
     robot_config.arm_profile = args.arm_profile
     robot_config.use_degrees = True
-    robot = LeKiwi(robot_config)
 
+    host_config = LeKiwiHostConfig()
+
+    validate_loop_freq_vs_cameras(
+        host_config.max_loop_freq_hz,
+        (cam.fps for cam in robot_config.cameras.values() if cam.fps is not None),
+    )
+
+    print_runtime_banner(
+        format_args_block("CLI args", args, parser),
+        format_dataclass_block("LeKiwiConfig", robot_config),
+        format_dataclass_block("LeKiwiHostConfig", host_config),
+        require_confirm=not args.no_confirm,
+    )
+
+    robot = LeKiwi(robot_config)
 
     logging.info("Connecting AlohaMini")
     robot.connect(calibrate_arm=args.calibrate_arm)
 
     logging.info("Starting HostAgent")
-    host_config = LeKiwiHostConfig()
     host = LeKiwiHost(host_config)
 
     last_cmd_time = time.time()

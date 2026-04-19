@@ -52,6 +52,10 @@ from lerobot.utils.train_utils import (
     save_checkpoint,
     update_last_checkpoint,
 )
+from lerobot.utils.runtime_config import (
+    format_dataclass_block,
+    print_runtime_banner,
+)
 from lerobot.utils.utils import (
     format_big_number,
     has_method,
@@ -213,6 +217,9 @@ def train(cfg: TrainPipelineConfig, accelerator: Accelerator | None = None):
 
     # Only log on main process
     if is_main_process:
+        print_runtime_banner(
+            format_dataclass_block("TrainPipelineConfig", cfg),
+        )
         logging.info(pformat(cfg.to_dict()))
 
     # Initialize wandb only on main process

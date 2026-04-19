@@ -13,6 +13,12 @@ from lerobot.teleoperators.so_leader import SOLeaderConfig
 from lerobot.utils.constants import ACTION, OBS_STR
 from lerobot.utils.control_utils import init_keyboard_listener
 from lerobot.utils.errors import DeviceNotConnectedError
+from lerobot.utils.runtime_config import (
+    format_args_block,
+    format_dataclass_block,
+    print_runtime_banner,
+    validate_client_fps_vs_cameras,
+)
 from lerobot.utils.utils import log_say
 from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
 
@@ -160,6 +166,11 @@ def main():
     parser.add_argument("--keyboard", action="store_true", default=False, help="Enable keyboard teleop for base/lift control")
     parser.add_argument("--setup_time", type=int, default=15, help="Initial setup time in seconds before first episode")
     parser.add_argument("--resume", action="store_true", help="Resume recording on existing dataset")
+    parser.add_argument(
+        "--no-confirm",
+        action="store_true",
+        help="Skip the runtime config confirmation prompt.",
+    )
 
     args = parser.parse_args()
 
@@ -177,6 +188,19 @@ def main():
         id=args.leader_id,
     )
     keyboard_config = KeyboardTeleopConfig()
+
+    validate_client_fps_vs_cameras(
+        args.fps,
+        (cam.fps for cam in robot_config.cameras.values() if cam.fps is not None),
+    )
+
+    print_runtime_banner(
+        format_args_block("CLI args", args, parser),
+        format_dataclass_block("LeKiwiClientConfig", robot_config),
+        format_dataclass_block("BiSOLeaderConfig", leader_arm_config),
+        format_dataclass_block("KeyboardTeleopConfig", keyboard_config),
+        require_confirm=not args.no_confirm,
+    )
 
     robot = LeKiwiClient(robot_config)
     leader_arm = BiSOLeader(leader_arm_config)
